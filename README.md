@@ -1,63 +1,147 @@
-# EverScan 区块链数据聚合平台
+# 🌟 EverScan - 区块链数据聚合平台
 
-🚀 **全新升级版本** - 多币种监控 + 贪婪恐惧指数 + 实时可视化界面
+EverScan 是一个现代化的区块链数据聚合平台，专注于实时监控加密货币市场数据和技术指标分析。
 
-## 🌟 核心功能
+## ✨ 特性
 
-### 📊 多币种实时监控
-- **可配置币种列表** - 通过 `config.toml` 自由添加/删除监控币种
-- **实时价格数据** - 来自 CoinGecko API 的最新市场数据
-- **技术指标分析** - 布林带、RSI 等专业技术指标
-- **自动信号检测** - 超买/超卖警告，价格突破提醒
+### 🚀 HYPE Token 专项监控
+- **专注监控**: 当前专门监控 Hyperliquid (HYPE) 代币
+- **实时数据**: 自动获取最新价格、交易量、市值信息
+- **技术指标**: 内置 RSI、布林带等技术分析工具
+- **智能缓存**: 高效的数据缓存机制，减少API调用
 
 ### 😱 市场情绪分析
-- **贪婪恐惧指数** - 来自 CoinMarketCap 的市场情绪指标
-- **中文本地化** - 完整的中文情绪分类和投资建议
-- **实时更新** - 与市场数据同步更新
+- **恐惧贪婪指数**: 实时获取市场情绪指标
+- **中文本地化**: 完整的中文情绪描述和投资建议
+- **直观展示**: 动漫风格的圆形指数表盘
 
-### 🌐 现代化Web界面
-- **响应式设计** - 支持桌面和移动设备
-- **实时图表** - 基于 Chart.js 的动态价格图表
-- **数据仪表板** - 直观的市场数据展示
-- **WebSocket支持** - 实时数据推送
+### 🎨 动漫风格界面
+- **卡片式设计**: 现代化的卡片布局，信息一目了然
+- **动漫美学**: 渐变色彩、圆角设计、动态效果
+- **响应式布局**: 完美适配各种设备屏幕
+- **实时刷新**: 自动更新数据，手动刷新按钮
+
+### 🔧 技术架构
+- **Rust 后端**: 高性能、内存安全的后端服务
+- **Axum 框架**: 现代化的异步 Web 框架
+- **多数据源**: 支持 CoinGecko、Alternative.me 等多个数据源
+- **RESTful API**: 标准化的 API 接口设计
 
 ## 🚀 快速开始
 
-### 1. 环境准备
+### 环境要求
 
-确保您的系统已安装：
-- **Rust** (1.70+): [安装指南](https://rustup.rs/)
-- **Git**: 用于克隆代码库
+- Rust 1.70+
+- Cargo (随 Rust 安装)
 
-### 2. 项目安装
+### 安装运行
 
+1. **克隆项目**
 ```bash
-# 克隆项目
-git clone <your-repo-url>
+git clone <repository-url>
 cd everscan
-
-# 编译项目
-cargo build --release
 ```
 
-### 3. 配置设置
+2. **配置设置**
+```bash
+# 复制配置文件
+cp config.toml.example config.toml
 
-#### 配置监控币种
-编辑 `config.toml` 文件中的币种列表：
+# 编辑配置（可选）
+# 默认配置已设置为只监控 HYPE 代币
+```
 
+3. **运行程序**
+```bash
+# 测试模式（显示详细日志）
+RUST_LOG=info EVERSCAN_TEST_MODE=true cargo run
+
+# 生产模式
+RUST_LOG=info cargo run
+```
+
+4. **访问界面**
+```
+打开浏览器访问: http://localhost:3000
+```
+
+## 🎮 界面预览
+
+### 主仪表板
+- **HYPE Token 卡片**: 显示实时价格、24h涨跌、交易量、市值
+- **技术指标**: RSI 进度条、布林带上下轨
+- **恐惧贪婪指数**: 动态圆形表盘显示市场情绪
+
+### 动漫风格特色
+- 🌈 渐变背景和卡片边框
+- ✨ 悬停动画效果
+- 🎯 圆角设计和阴影效果
+- 📱 响应式移动端适配
+
+## 📊 API 接口
+
+### HYPE 数据接口
+```bash
+# 获取 HYPE 代币数据
+GET /api/market-data/hyperliquid
+
+# 响应示例
+{
+  "success": true,
+  "data": {
+    "current_price": 47.93,
+    "price_change_24h": 2.23,
+    "total_volume": 412943395,
+    "market_cap": 15979991260,
+    "rsi": 77.75,
+    "bollinger_upper": 48.44,
+    "bollinger_lower": 45.05
+  }
+}
+```
+
+### 恐惧贪婪指数接口
+```bash
+# 获取恐惧贪婪指数
+GET /api/fear-greed-index
+
+# 响应示例
+{
+  "success": true,
+  "data": {
+    "value": 74,
+    "classification": "Greed",
+    "chinese_classification": "贪婪",
+    "investment_advice": "市场贪婪，注意风险",
+    "sentiment_chinese": "贪婪"
+  }
+}
+```
+
+### 系统状态接口
+```bash
+# 缓存统计
+GET /api/stats
+
+# 健康检查
+GET /api/health
+```
+
+## ⚙️ 配置说明
+
+### 监控币种配置
 ```toml
 [crypto_monitoring]
-# 要监控的币种列表（使用CoinGecko的币种ID）
+# 当前只监控 HYPE 代币
 coins = [
-    \"bitcoin\",          # 比特币 (BTC)
-    \"hyperliquid\",      # HYPE代币
-    \"ethereum\",         # 以太坊 (ETH)
-    \"binancecoin\",      # 币安币 (BNB)
-    \"solana\",           # Solana (SOL)
+    "hyperliquid",      # HYPE代币
+    # 可以添加更多币种:
+    # "bitcoin",        # 比特币 (BTC)
+    # "ethereum",       # 以太坊 (ETH)
 ]
 ```
 
-#### 技术指标配置
+### 技术指标配置
 ```toml
 [crypto_monitoring.technical_indicators]
 rsi_period = 14         # RSI计算周期（天）
@@ -65,219 +149,69 @@ bollinger_period = 20   # 布林带计算周期（天）
 bollinger_std_dev = 2.0 # 布林带标准差倍数
 ```
 
-### 4. 运行应用
+## 🔧 开发说明
 
-#### 测试模式（验证数据获取）
-```bash
-EVERSCAN_TEST_MODE=true cargo run
+### 项目结构
+```
+src/
+├── clients/           # API客户端
+│   ├── coingecko_client.rs    # CoinGecko API
+│   └── coinmarketcap_client.rs # 恐惧贪婪指数
+├── tasks/            # 数据采集任务
+│   ├── crypto_market_task.rs  # HYPE数据采集
+│   └── fear_greed_task.rs     # 恐惧贪婪指数采集
+├── web/              # Web服务
+│   ├── api.rs        # API路由
+│   ├── cache.rs      # 数据缓存
+│   └── mod.rs        # Web服务器
+└── static/           # 静态文件
+    └── dashboard.html # 动漫风格前端界面
 ```
 
-#### 生产模式（启动Web服务器）
-```bash
-cargo run
-```
+### 添加新币种
+1. 在 `config.toml` 的 `coins` 数组中添加币种ID
+2. 重启程序即可自动监控新币种
 
-### 5. 访问界面
+### 自定义前端
+- 修改 `static/dashboard.html` 文件
+- 支持完整的 HTML/CSS/JavaScript 自定义
+- 内置响应式设计和动漫风格样式
 
-启动成功后，访问以下地址：
+## 🔄 数据更新机制
 
-- **📊 主仪表板**: http://localhost:3000
-- **🔗 API健康检查**: http://localhost:3000/api/health
-- **📈 市场数据API**: http://localhost:3000/api/market-data
-- **😱 贪婪恐惧指数API**: http://localhost:3000/api/fear-greed-index
+- **启动时执行**: 程序启动时自动执行所有任务获取初始数据
+- **定时更新**: 每4小时自动更新一次数据
+- **智能缓存**: 内存缓存减少API调用频率
+- **手动刷新**: 前端提供手动刷新按钮
 
-## 📋 API 接口
+## 🎯 使用场景
 
-### 市场数据接口
+- **个人投资**: 专注监控感兴趣的代币（如HYPE）
+- **技术分析**: 实时技术指标分析
+- **市场情绪**: 掌握整体市场恐惧贪婪情绪
+- **数据看板**: 美观的数据展示界面
 
-#### 获取所有市场数据
-```bash
-curl http://localhost:3000/api/market-data
-```
+## 📝 更新日志
 
-#### 获取特定币种数据
-```bash
-curl http://localhost:3000/api/market-data/bitcoin
-```
+### v0.2.0 - HYPE专项版本
+- ✅ 移除BTC等其他币种，专注HYPE监控
+- ✅ 全新动漫风格卡片式界面
+- ✅ 恐惧贪婪指数中文本地化
+- ✅ 响应式设计和移动端适配
+- ✅ 启动时自动数据获取
 
-#### 获取贪婪恐惧指数
-```bash
-curl http://localhost:3000/api/fear-greed-index
-```
+### v0.1.0 - 基础版本
+- ✅ 多币种数据采集
+- ✅ 技术指标计算
+- ✅ RESTful API接口
+- ✅ 基础Web界面
 
-#### 获取缓存统计
-```bash
-curl http://localhost:3000/api/stats
-```
+## 🤝 贡献
 
-
-## 🔧 高级配置
-
-### 数据收集间隔
-在 `config.toml` 中配置任务执行间隔：
-
-```toml
-[tasks.intervals]
-crypto_market = 14400   # 4小时采集一次市场数据
-```
-
-### 技术指标阈值
-```toml
-[crypto_monitoring.technical_indicators]
-rsi_period = 14         # RSI计算周期
-bollinger_period = 20   # 布林带计算周期
-bollinger_std_dev = 2.0 # 布林带标准差倍数
-```
-
-### 历史数据配置
-```toml
-[crypto_monitoring.data_collection]
-history_days = 30       # 收集30天历史数据用于技术指标计算
-enable_technical_indicators = true  # 启用技术指标计算
-```
-
-## 📊 支持的币种
-
-系统支持所有 CoinGecko 平台上的币种。常用币种ID：
-
-| 币种名称 | CoinGecko ID | 符号 |
-|---------|--------------|------|
-| 比特币 | `bitcoin` | BTC |
-| 以太坊 | `ethereum` | ETH |
-| HYPE | `hyperliquid` | HYPE |
-| 币安币 | `binancecoin` | BNB |
-| Solana | `solana` | SOL |
-| Cardano | `cardano` | ADA |
-| Polkadot | `polkadot` | DOT |
-| Chainlink | `chainlink` | LINK |
-
-更多币种ID可在 [CoinGecko API](https://api.coingecko.com/api/v3/coins/list) 查询。
-
-## 🛠️ 技术架构
-
-### 数据存储策略
-- **内存缓存** - 使用 `Arc<RwLock<HashMap>>` 实现高性能实时数据访问
-- **数据生命周期** - 4小时到1天的数据有效期，适合实时监控需求
-- **可选数据库** - 支持 PostgreSQL 用于历史数据存储和分析
-
-### Web服务架构
-- **Axum框架** - 现代化的异步Web框架
-- **RESTful API** - 标准化的API接口设计
-- **WebSocket支持** - 实时数据推送功能
-- **静态文件服务** - 集成的前端资源服务
-
-### 任务调度系统
-- **启动时执行** - 应用启动时自动获取初始数据
-- **可配置间隔** - 通过配置文件控制数据更新频率
-- **错误恢复** - 自动重试和错误处理机制
-
-## 🔍 故障排除
-
-### 常见问题
-
-#### 1. 编译错误
-```bash
-# 更新Rust工具链
-rustup update
-
-# 清理并重新编译
-cargo clean
-cargo build
-```
-
-#### 2. API限流错误
-```
-429 Too Many Requests - Rate Limit Exceeded
-```
-**解决方案**：
-- CoinGecko免费API有请求限制
-- 增加配置文件中的 `crypto_market` 间隔时间
-- 考虑升级到付费API计划
-
-#### 3. 端口占用错误
-```
-Address already in use (os error 48)
-```
-**解决方案**：
-```bash
-# 查找占用端口的进程
-lsof -i :3000
-
-# 杀掉进程
-kill <PID>
-```
-
-#### 4. 数据获取失败
-检查网络连接和API可用性：
-```bash
-# 测试CoinGecko API
-curl \"https://api.coingecko.com/api/v3/ping\"
-
-# 测试贪婪恐惧指数API
-curl \"https://api.alternative.me/fng/\"
-```
-
-### 日志调试
-
-启用详细日志：
-```bash
-RUST_LOG=debug cargo run
-```
-
-查看特定模块日志：
-```bash
-RUST_LOG=everscan::clients=debug cargo run
-```
-
-## 🔮 未来规划
-
-### 即将推出的功能
-- **更多技术指标** - MACD、KDJ、移动平均线等
-- **价格预警系统** - 自定义价格阈值通知
-- **历史数据分析** - 长期趋势分析和回测功能
-- **多交易所数据** - 整合更多数据源
-- **移动端应用** - React Native移动应用
-
-### 扩展性考虑
-- **微服务架构** - 支持服务拆分和独立部署
-- **容器化部署** - Docker和Kubernetes支持
-- **分布式缓存** - Redis集群支持
-- **消息队列** - 异步任务处理优化
-
-## 🤝 贡献指南
-
-欢迎提交Issue和Pull Request！
-
-### 开发环境设置
-```bash
-# 克隆项目
-git clone <repo-url>
-cd everscan
-
-# 安装开发依赖
-cargo install cargo-watch
-
-# 开发模式运行（自动重载）
-cargo watch -x run
-```
-
-### 代码规范
-- 使用 `cargo fmt` 格式化代码
-- 使用 `cargo clippy` 检查代码质量
-- 添加适当的中文注释
-- 遵循Rust最佳实践
+欢迎提交 Issue 和 Pull Request！
 
 ## 📄 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件
 
-## 🙏 致谢
-
-- [CoinGecko](https://www.coingecko.com/) - 提供免费的加密货币数据API
-- [CoinMarketCap](https://coinmarketcap.com/) - 提供贪婪恐惧指数数据
-- [Rust社区](https://www.rust-lang.org/) - 优秀的编程语言和生态系统
-- [Axum](https://github.com/tokio-rs/axum) - 现代化的Web框架
-
 ---
-
-**💡 提示**: 这是一个开源项目，仅供学习和研究使用。投资有风险，请谨慎决策！ 

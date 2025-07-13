@@ -33,14 +33,14 @@ arkham = 3600           # 1小时
 # 加密货币监控配置
 [crypto_monitoring]
 # 要监控的币种列表（使用CoinGecko的币种ID）
-# 可以自由添加或删除币种
+# 目前只监控HYPE代币
 coins = [
-    "bitcoin",          # 比特币 (BTC)
     "hyperliquid",      # HYPE代币
-    "ethereum",         # 以太坊 (ETH)
-    "binancecoin",      # 币安币 (BNB)
-    "solana",           # Solana (SOL)
-    # 更多币种示例:
+    # 可以添加更多币种:
+    # "bitcoin",        # 比特币 (BTC)
+    # "ethereum",       # 以太坊 (ETH)
+    # "binancecoin",    # 币安币 (BNB)
+    # "solana",         # Solana (SOL)
     # "cardano",        # Cardano (ADA)
     # "polkadot",       # Polkadot (DOT)
     # "chainlink",      # Chainlink (LINK)
