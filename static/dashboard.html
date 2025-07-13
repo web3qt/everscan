@@ -280,6 +280,10 @@
                 <div class="status-label">最后更新</div>
             </div>
             <div class="status-item">
+                <div class="status-value" id="fearGreedIndex">-</div>
+                <div class="status-label">贪婪恐惧指数</div>
+            </div>
+            <div class="status-item">
                 <div class="status-value" id="cacheHits">-</div>
                 <div class="status-label">缓存命中率</div>
             </div>
@@ -390,9 +394,21 @@
                     this.showError('获取初始数据失败: ' + error.message);
                 }
                 
+                // 获取贪婪恐惧指数
+                try {
+                    const response = await fetch('/api/fear-greed-index');
+                    const result = await response.json();
+                    
+                    if (result.success && result.data) {
+                        this.updateFearGreedIndex(result.data);
+                    }
+                } catch (error) {
+                    console.error('❌ 获取贪婪恐惧指数失败:', error);
+                }
+                
                 // 获取缓存统计
                 try {
-                    const response = await fetch('/api/cache/stats');
+                    const response = await fetch('/api/stats');
                     const result = await response.json();
                     
                     if (result.success && result.data) {
@@ -545,6 +561,40 @@
                     ? ((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(1) + '%'
                     : 'N/A';
                 document.getElementById('cacheHits').textContent = hitRate;
+            }
+
+            updateFearGreedIndex(fearGreedData) {
+                const fearGreedElement = document.getElementById('fearGreedIndex');
+                
+                if (fearGreedData && fearGreedData.value !== undefined) {
+                    const value = fearGreedData.value;
+                    const chineseClassification = fearGreedData.chinese_classification || fearGreedData.classification;
+                    
+                    // 根据指数值设置颜色
+                    let color = '#95a5a6'; // 默认灰色
+                    if (value <= 24) {
+                        color = '#e74c3c'; // 极度恐惧 - 红色
+                    } else if (value <= 44) {
+                        color = '#f39c12'; // 恐惧 - 橙色
+                    } else if (value <= 55) {
+                        color = '#95a5a6'; // 中性 - 灰色
+                    } else if (value <= 75) {
+                        color = '#f1c40f'; // 贪婪 - 黄色
+                    } else {
+                        color = '#27ae60'; // 极度贪婪 - 绿色
+                    }
+                    
+                    fearGreedElement.innerHTML = `
+                        <span style="color: ${color}; font-weight: bold;">${value}</span>
+                        <br>
+                        <small style="color: ${color};">${chineseClassification}</small>
+                    `;
+                    
+                    // 添加工具提示
+                    fearGreedElement.title = fearGreedData.investment_advice || '市场情绪指标';
+                } else {
+                    fearGreedElement.textContent = '-';
+                }
             }
 
             showError(message) {

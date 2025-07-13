@@ -3,6 +3,7 @@
 // pub mod debank_task;
 // pub mod coingecko_task;
 pub mod crypto_market_task;
+pub mod fear_greed_task; // 新增：贪婪恐惧指数任务
 pub mod task_manager;
 
 
@@ -12,6 +13,7 @@ pub mod task_manager;
 // pub use coingecko_task::*;
 pub use task_manager::*;
 pub use crypto_market_task::*;
+pub use fear_greed_task::*; // 新增：导出贪婪恐惧指数任务
 
 
 use anyhow::Result;

@@ -1,13 +1,16 @@
+// pub mod bitget_client; // 已移除Bitget客户端
+pub mod coingecko_client;
 // pub mod dune_client;
 // pub mod glassnode_client;
 // pub mod debank_client;
-pub mod coingecko_client;
+pub mod coinmarketcap_client; // 新增：CoinMarketCap客户端
 
-
+// pub use bitget_client::*; // 已移除
+pub use coingecko_client::*;
 // pub use dune_client::*;
 // pub use glassnode_client::*;
 // pub use debank_client::*;
-pub use coingecko_client::*;
+pub use coinmarketcap_client::*; // 新增：导出CoinMarketCap客户端
 
 
 use anyhow::Result;

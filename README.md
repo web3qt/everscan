@@ -1,134 +1,94 @@
-# EverScan - 通用加密货币数据聚合平台
+# EverScan 区块链数据聚合平台
 
-🚀 **EverScan** 是一个基于 Rust 的高性能区块链数据聚合平台，专注于提供多币种加密货币市场数据的实时监控和技术分析。
+🚀 **全新升级版本** - 多币种监控 + 贪婪恐惧指数 + 实时可视化界面
 
-## ✨ 核心特性
+## 🌟 核心功能
 
-### 🪙 可配置多币种监控
-- **灵活的币种配置**: 通过 `config.toml` 文件轻松添加或删除要监控的加密货币
-- **默认支持币种**: 比特币(BTC)、HYPE代币、以太坊(ETH)、币安币(BNB)、Solana(SOL)
-- **统一数据源**: 使用 CoinGecko API 聚合全球300+交易所数据，避免管理多个交易所API的复杂性
+### 📊 多币种实时监控
+- **可配置币种列表** - 通过 `config.toml` 自由添加/删除监控币种
+- **实时价格数据** - 来自 CoinGecko API 的最新市场数据
+- **技术指标分析** - 布林带、RSI 等专业技术指标
+- **自动信号检测** - 超买/超卖警告，价格突破提醒
 
-### 📊 智能技术指标分析
-- **布林带 (Bollinger Bands)**: 20周期，2倍标准差，自动识别价格突破信号
-- **RSI指标**: 14周期相对强弱指数，自动检测超买/超卖信号
-- **可配置参数**: 技术指标周期和阈值可通过配置文件调整
-- **实时信号**: 自动识别并警告超买超卖状态
+### 😱 市场情绪分析
+- **贪婪恐惧指数** - 来自 CoinMarketCap 的市场情绪指标
+- **中文本地化** - 完整的中文情绪分类和投资建议
+- **实时更新** - 与市场数据同步更新
 
-### 🏗️ 混合数据存储架构
-我们采用了**内存缓存 + 可选数据库**的混合存储策略：
+### 🌐 现代化Web界面
+- **响应式设计** - 支持桌面和移动设备
+- **实时图表** - 基于 Chart.js 的动态价格图表
+- **数据仪表板** - 直观的市场数据展示
+- **WebSocket支持** - 实时数据推送
 
-#### 📦 内存缓存（主要存储）
-- **实时数据存储**: 使用 `Arc<RwLock<HashMap>>` 存储最新的市场数据
-- **快速访问**: 毫秒级数据查询响应
-- **生命周期管理**: 数据自动过期（4小时-1天）
-- **线程安全**: 支持多线程并发读写
+## 🚀 快速开始
 
-#### 💾 PostgreSQL（可选/历史数据）
-- **长期存储**: 历史趋势数据和分析报告
-- **数据分析**: 支持复杂查询和数据挖掘
-- **可选配置**: 可以仅使用内存缓存运行，无需数据库
+### 1. 环境准备
 
-### 🌐 内置Web可视化界面
-- **RESTful API**: 完整的API端点用于数据访问
-- **实时仪表板**: 现代化的Web界面展示市场数据
-- **WebSocket推送**: 实时数据更新，无需手动刷新
-- **响应式设计**: 支持桌面和移动设备访问
+确保您的系统已安装：
+- **Rust** (1.70+): [安装指南](https://rustup.rs/)
+- **Git**: 用于克隆代码库
 
-### ⚙️ 智能调度系统
-- **可配置间隔**: 默认每4小时自动更新，可自定义
-- **错误重试机制**: 自动重试失败的API请求
-- **API限制处理**: 智能处理CoinGecko API限制
-- **健康检查**: 实时监控系统和API连接状态
+### 2. 项目安装
 
-## 🛠️ 快速开始
-
-### 环境要求
-- Rust 1.70+ 
-- PostgreSQL 12+ (可选，仅用于历史数据)
-- 网络连接（访问CoinGecko API）
-
-### 安装步骤
-
-1. **克隆项目**
 ```bash
-git clone <repository-url>
+# 克隆项目
+git clone <your-repo-url>
 cd everscan
+
+# 编译项目
+cargo build --release
 ```
 
-2. **配置环境**
-```bash
-# 复制配置文件模板
-cp config.toml.example config.toml
+### 3. 配置设置
 
-# 编辑配置文件，添加你想监控的币种
-nano config.toml
-```
+#### 配置监控币种
+编辑 `config.toml` 文件中的币种列表：
 
-3. **配置币种监控**
-编辑 `config.toml` 文件：
 ```toml
 [crypto_monitoring]
 # 要监控的币种列表（使用CoinGecko的币种ID）
 coins = [
-    "bitcoin",          # 比特币 (BTC)
-    "hyperliquid",      # HYPE代币
-    "ethereum",         # 以太坊 (ETH)
-    "binancecoin",      # 币安币 (BNB)
-    "solana",           # Solana (SOL)
-    # 添加更多币种...
+    \"bitcoin\",          # 比特币 (BTC)
+    \"hyperliquid\",      # HYPE代币
+    \"ethereum\",         # 以太坊 (ETH)
+    \"binancecoin\",      # 币安币 (BNB)
+    \"solana\",           # Solana (SOL)
 ]
-
-# 技术指标配置
-[crypto_monitoring.technical_indicators]
-rsi_period = 14              # RSI计算周期
-bollinger_period = 20        # 布林带周期
-bollinger_std_dev = 2.0      # 布林带标准差倍数
-rsi_overbought = 70.0        # RSI超买阈值
-rsi_oversold = 30.0          # RSI超卖阈值
-```
-
-4. **运行应用**
-
-**测试模式**（验证数据获取）：
-```bash
-EVERSCAN_TEST_MODE=true cargo run
-```
-
-**Web服务模式**（启动可视化界面）：
-```bash
-EVERSCAN_TEST_MODE=false WEB_PORT=3000 cargo run
-```
-
-5. **访问界面**
-- 🌐 Web仪表板: http://localhost:3000
-- 📡 API端点: http://localhost:3000/api
-- 🔌 WebSocket: ws://localhost:3000/ws
-
-## 📖 使用指南
-
-### 🔧 配置管理
-
-#### 添加新币种
-1. 在 [CoinGecko](https://www.coingecko.com/) 上找到币种ID
-2. 编辑 `config.toml` 文件，在 `coins` 数组中添加币种ID
-3. 重启应用
-
-#### 调整监控频率
-```toml
-[tasks.intervals]
-crypto_market = 7200  # 2小时 = 7200秒
 ```
 
 #### 技术指标配置
 ```toml
 [crypto_monitoring.technical_indicators]
-rsi_period = 21              # 更长的RSI周期
-bollinger_period = 25        # 更长的布林带周期
-bollinger_std_dev = 2.5      # 更宽的布林带
+rsi_period = 14         # RSI计算周期（天）
+bollinger_period = 20   # 布林带计算周期（天）
+bollinger_std_dev = 2.0 # 布林带标准差倍数
 ```
 
-### 📊 API使用
+### 4. 运行应用
+
+#### 测试模式（验证数据获取）
+```bash
+EVERSCAN_TEST_MODE=true cargo run
+```
+
+#### 生产模式（启动Web服务器）
+```bash
+cargo run
+```
+
+### 5. 访问界面
+
+启动成功后，访问以下地址：
+
+- **📊 主仪表板**: http://localhost:3000
+- **🔗 API健康检查**: http://localhost:3000/api/health
+- **📈 市场数据API**: http://localhost:3000/api/market-data
+- **😱 贪婪恐惧指数API**: http://localhost:3000/api/fear-greed-index
+
+## 📋 API 接口
+
+### 市场数据接口
 
 #### 获取所有市场数据
 ```bash
@@ -140,141 +100,184 @@ curl http://localhost:3000/api/market-data
 curl http://localhost:3000/api/market-data/bitcoin
 ```
 
+#### 获取贪婪恐惧指数
+```bash
+curl http://localhost:3000/api/fear-greed-index
+```
+
 #### 获取缓存统计
 ```bash
 curl http://localhost:3000/api/stats
 ```
 
-#### 健康检查
+
+## 🔧 高级配置
+
+### 数据收集间隔
+在 `config.toml` 中配置任务执行间隔：
+
+```toml
+[tasks.intervals]
+crypto_market = 14400   # 4小时采集一次市场数据
+```
+
+### 技术指标阈值
+```toml
+[crypto_monitoring.technical_indicators]
+rsi_period = 14         # RSI计算周期
+bollinger_period = 20   # 布林带计算周期
+bollinger_std_dev = 2.0 # 布林带标准差倍数
+```
+
+### 历史数据配置
+```toml
+[crypto_monitoring.data_collection]
+history_days = 30       # 收集30天历史数据用于技术指标计算
+enable_technical_indicators = true  # 启用技术指标计算
+```
+
+## 📊 支持的币种
+
+系统支持所有 CoinGecko 平台上的币种。常用币种ID：
+
+| 币种名称 | CoinGecko ID | 符号 |
+|---------|--------------|------|
+| 比特币 | `bitcoin` | BTC |
+| 以太坊 | `ethereum` | ETH |
+| HYPE | `hyperliquid` | HYPE |
+| 币安币 | `binancecoin` | BNB |
+| Solana | `solana` | SOL |
+| Cardano | `cardano` | ADA |
+| Polkadot | `polkadot` | DOT |
+| Chainlink | `chainlink` | LINK |
+
+更多币种ID可在 [CoinGecko API](https://api.coingecko.com/api/v3/coins/list) 查询。
+
+## 🛠️ 技术架构
+
+### 数据存储策略
+- **内存缓存** - 使用 `Arc<RwLock<HashMap>>` 实现高性能实时数据访问
+- **数据生命周期** - 4小时到1天的数据有效期，适合实时监控需求
+- **可选数据库** - 支持 PostgreSQL 用于历史数据存储和分析
+
+### Web服务架构
+- **Axum框架** - 现代化的异步Web框架
+- **RESTful API** - 标准化的API接口设计
+- **WebSocket支持** - 实时数据推送功能
+- **静态文件服务** - 集成的前端资源服务
+
+### 任务调度系统
+- **启动时执行** - 应用启动时自动获取初始数据
+- **可配置间隔** - 通过配置文件控制数据更新频率
+- **错误恢复** - 自动重试和错误处理机制
+
+## 🔍 故障排除
+
+### 常见问题
+
+#### 1. 编译错误
 ```bash
-curl http://localhost:3000/api/health
+# 更新Rust工具链
+rustup update
+
+# 清理并重新编译
+cargo clean
+cargo build
 ```
 
-### 🔌 WebSocket实时数据
+#### 2. API限流错误
+```
+429 Too Many Requests - Rate Limit Exceeded
+```
+**解决方案**：
+- CoinGecko免费API有请求限制
+- 增加配置文件中的 `crypto_market` 间隔时间
+- 考虑升级到付费API计划
 
-```javascript
-const ws = new WebSocket('ws://localhost:3000/ws');
+#### 3. 端口占用错误
+```
+Address already in use (os error 48)
+```
+**解决方案**：
+```bash
+# 查找占用端口的进程
+lsof -i :3000
 
-ws.onmessage = function(event) {
-    const marketData = JSON.parse(event.data);
-    console.log('实时市场数据:', marketData);
-};
-
-// 发送ping保持连接
-ws.send('ping');
+# 杀掉进程
+kill <PID>
 ```
 
-## 🏗️ 架构设计
+#### 4. 数据获取失败
+检查网络连接和API可用性：
+```bash
+# 测试CoinGecko API
+curl \"https://api.coingecko.com/api/v3/ping\"
 
-### 数据流程图
+# 测试贪婪恐惧指数API
+curl \"https://api.alternative.me/fng/\"
 ```
-CoinGecko API → 数据获取 → 技术指标计算 → 内存缓存 → Web API/WebSocket
-                    ↓
-              PostgreSQL (可选)
-```
-
-### 核心组件
-
-1. **数据获取层** (`src/clients/`)
-   - CoinGecko API客户端
-   - 自动重试和错误处理
-   - API限制智能管理
-
-2. **数据处理层** (`src/tasks/`)
-   - 技术指标计算
-   - 数据验证和清洗
-   - 定时任务调度
-
-3. **存储层** (`src/storage/`, `src/web/cache.rs`)
-   - 内存缓存（主要）
-   - PostgreSQL（可选）
-   - 数据生命周期管理
-
-4. **Web服务层** (`src/web/`)
-   - RESTful API
-   - WebSocket实时推送
-   - 静态文件服务
-
-## 🎯 使用场景
-
-### 个人投资者
-- 监控投资组合中的币种
-- 获取技术指标信号
-- 实时价格提醒
-
-### 开发者
-- 集成加密货币数据到应用
-- 构建交易机器人
-- 数据分析和研究
-
-### 团队协作
-- 共享市场数据源
-- 统一的监控界面
-- 历史数据分析
-
-## 🚀 高级功能
-
-### 批量数据获取
-应用智能处理API限制，自动在请求间添加适当延迟，确保稳定的数据获取。
-
-### 信号检测
-- **超买信号**: RSI > 70 时自动警告
-- **超卖信号**: RSI < 30 时自动警告
-- **价格突破**: 价格突破布林带上下轨时提醒
-
-### 性能优化
-- 内存缓存提供毫秒级响应
-- 异步处理避免阻塞
-- 智能数据过期管理
-
-## 🔒 安全考虑
-
-- API密钥通过环境变量管理
-- 配置文件已加入 `.gitignore`
-- 无敏感信息硬编码
-
-## 📈 扩展性
-
-### 添加新数据源
-1. 实现 `ApiClient` trait
-2. 创建对应的任务类型
-3. 在配置中启用
-
-### 添加新技术指标
-1. 在 `TechnicalIndicators` 结构体中添加字段
-2. 实现计算逻辑
-3. 更新API响应格式
-
-### 添加新存储后端
-1. 实现存储trait
-2. 更新配置选项
-3. 集成到应用流程
-
-## 🛡️ 故障排除
-
 
 ### 日志调试
+
+启用详细日志：
 ```bash
 RUST_LOG=debug cargo run
 ```
 
+查看特定模块日志：
+```bash
+RUST_LOG=everscan::clients=debug cargo run
+```
+
+## 🔮 未来规划
+
+### 即将推出的功能
+- **更多技术指标** - MACD、KDJ、移动平均线等
+- **价格预警系统** - 自定义价格阈值通知
+- **历史数据分析** - 长期趋势分析和回测功能
+- **多交易所数据** - 整合更多数据源
+- **移动端应用** - React Native移动应用
+
+### 扩展性考虑
+- **微服务架构** - 支持服务拆分和独立部署
+- **容器化部署** - Docker和Kubernetes支持
+- **分布式缓存** - Redis集群支持
+- **消息队列** - 异步任务处理优化
+
 ## 🤝 贡献指南
 
-1. Fork 项目
-2. 创建特性分支
-3. 提交更改
-4. 发起 Pull Request
+欢迎提交Issue和Pull Request！
+
+### 开发环境设置
+```bash
+# 克隆项目
+git clone <repo-url>
+cd everscan
+
+# 安装开发依赖
+cargo install cargo-watch
+
+# 开发模式运行（自动重载）
+cargo watch -x run
+```
+
+### 代码规范
+- 使用 `cargo fmt` 格式化代码
+- 使用 `cargo clippy` 检查代码质量
+- 添加适当的中文注释
+- 遵循Rust最佳实践
 
 ## 📄 许可证
 
-MIT OR Apache-2.0
+MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 🙏 致谢
 
-- [CoinGecko](https://www.coingecko.com/) 提供免费的加密货币数据API
-- [Rust](https://www.rust-lang.org/) 提供安全高效的系统编程语言
-- [Axum](https://github.com/tokio-rs/axum) 提供现代化的Web框架
+- [CoinGecko](https://www.coingecko.com/) - 提供免费的加密货币数据API
+- [CoinMarketCap](https://coinmarketcap.com/) - 提供贪婪恐惧指数数据
+- [Rust社区](https://www.rust-lang.org/) - 优秀的编程语言和生态系统
+- [Axum](https://github.com/tokio-rs/axum) - 现代化的Web框架
 
 ---
 
-**EverScan** - 让加密货币数据监控变得简单而强大 🚀 
+**💡 提示**: 这是一个开源项目，仅供学习和研究使用。投资有风险，请谨慎决策！ 

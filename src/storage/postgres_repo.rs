@@ -45,6 +45,25 @@ impl PostgresRepository {
         
         Ok(repo)
     }
+
+    /// 创建模拟的PostgreSQL存储仓库（用于测试）
+    /// 
+    /// # 返回
+    /// * `Self` - 模拟的存储仓库实例
+    pub fn new_mock() -> Self {
+        // 创建一个模拟的连接池（实际上不会使用）
+        // 这里我们创建一个空的PgPool，但实际操作会被跳过
+        use sqlx::postgres::PgPoolOptions;
+        
+        // 注意：这里创建的pool不会真正连接数据库
+        // 所有操作都会返回默认值或空结果
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy("postgresql://mock:mock@localhost/mock")
+            .expect("创建模拟连接池失败");
+            
+        Self { pool }
+    }
     
     /// 初始化数据库表
     /// 

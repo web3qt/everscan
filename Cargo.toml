@@ -9,18 +9,22 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 # 异步运行时
 tokio = { version = "1.0", features = ["full"] }
+futures-util = "0.3"
 
 # HTTP客户端
 reqwest = { version = "0.11", features = ["json"] }
 
 # Web框架 - 用于API和可视化界面
 axum = { version = "0.7", features = ["ws", "macros"] }
-tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
-futures-util = "0.3" # 添加futures-util依赖
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+hyper = "1.0"
+
+# WebSocket支持
+tokio-tungstenite = "0.21"
 
 # 数据库
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "json"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
 
 # 序列化/反序列化
 serde = { version = "1.0", features = ["derive"] }
@@ -54,6 +58,9 @@ cron = "0.12"
 
 # 版本锁定以避免edition2024问题
 base64ct = "1.6"
+
+# Base64编码（用于某些API认证）
+base64 = "0.21"
 
 [dev-dependencies]
 tokio-test = "0.4" 

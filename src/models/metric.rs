@@ -40,6 +40,8 @@ pub enum DataSource {
     DeBank,
     /// CoinGecko
     CoinGecko,
+    /// CoinMarketCap
+    CoinMarketCap,
     /// Arkham Intelligence
     Arkham,
     /// Bitget
@@ -54,6 +56,7 @@ impl DataSource {
             DataSource::Glassnode => "glassnode",
             DataSource::DeBank => "debank",
             DataSource::CoinGecko => "coingecko",
+            DataSource::CoinMarketCap => "coinmarketcap",
             DataSource::Arkham => "arkham",
             DataSource::Bitget => "bitget",
         }

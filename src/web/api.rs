@@ -79,6 +79,8 @@ pub fn create_api_routes(
         .route("/stats", get(get_cache_stats))
         // 获取支持的币种列表
         .route("/coins", get(get_supported_coins))
+        // 获取贪婪恐惧指数
+        .route("/fear-greed-index", get(get_fear_greed_index))
 }
 
 /// 健康检查端点
@@ -117,4 +119,12 @@ async fn get_supported_coins(
 ) -> Result<Json<ApiResponse<Vec<String>>>, StatusCode> {
     let coins = cache.get_supported_coins();
     Ok(Json(ApiResponse::success(coins)))
+}
+
+/// 获取贪婪恐惧指数
+async fn get_fear_greed_index(
+    State(cache): State<Arc<DataCache>>,
+) -> Result<Json<ApiResponse<Option<serde_json::Value>>>, StatusCode> {
+    let fear_greed_data = cache.get_fear_greed_index();
+    Ok(Json(ApiResponse::success(fear_greed_data)))
 } 

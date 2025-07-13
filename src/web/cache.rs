@@ -86,12 +86,14 @@ pub enum RSISignal {
 
 /// 数据缓存管理器
 /// 
-/// 负责管理内存中的加密货币市场数据
+/// 负责管理内存中的加密货币市场数据和贪婪恐惧指数
 /// 提供高效的读写操作和数据过期管理
 pub struct DataCache {
     /// 市场数据缓存
     /// key: 币种ID, value: 缓存的市场数据
     market_data: RwLock<HashMap<String, CachedMarketData>>,
+    /// 贪婪恐惧指数缓存
+    fear_greed_index: RwLock<Option<serde_json::Value>>,
     /// 缓存统计信息
     stats: RwLock<CacheStats>,
 }
@@ -120,6 +122,7 @@ impl DataCache {
         info!("💾 初始化数据缓存管理器");
         Self {
             market_data: RwLock::new(HashMap::new()),
+            fear_greed_index: RwLock::new(None),
             stats: RwLock::new(CacheStats::default()),
         }
     }
@@ -323,6 +326,56 @@ impl DataCache {
     pub fn contains(&self, coin_id: &str) -> bool {
         let cache = self.market_data.read().unwrap();
         cache.contains_key(coin_id)
+    }
+
+    /// 设置贪婪恐惧指数数据
+    /// 
+    /// # 参数
+    /// * `data` - 贪婪恐惧指数数据
+    pub async fn set_fear_greed_index(&self, data: serde_json::Value) {
+        debug!("💾 更新贪婪恐惧指数缓存");
+        
+        {
+            let mut cache = self.fear_greed_index.write().unwrap();
+            *cache = Some(data);
+        }
+
+        // 更新统计信息
+        {
+            let mut stats = self.stats.write().unwrap();
+            stats.last_updated = Some(Utc::now());
+            *stats.sources.entry("CoinMarketCap".to_string()).or_insert(0) += 1;
+        }
+
+        info!("✅ 贪婪恐惧指数缓存已更新");
+    }
+
+    /// 获取贪婪恐惧指数数据
+    /// 
+    /// # 返回
+    /// * `Option<serde_json::Value>` - 贪婪恐惧指数数据
+    pub fn get_fear_greed_index(&self) -> Option<serde_json::Value> {
+        debug!("📖 读取贪婪恐惧指数缓存");
+        
+        let cache = self.fear_greed_index.read().unwrap();
+        
+        if cache.is_some() {
+            // 更新命中统计
+            {
+                let mut stats = self.stats.write().unwrap();
+                stats.hits += 1;
+            }
+            debug!("✅ 贪婪恐惧指数缓存命中");
+        } else {
+            // 更新未命中统计
+            {
+                let mut stats = self.stats.write().unwrap();
+                stats.misses += 1;
+            }
+            debug!("❌ 贪婪恐惧指数缓存未命中");
+        }
+        
+        cache.clone()
     }
 }
 
