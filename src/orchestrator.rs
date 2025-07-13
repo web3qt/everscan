@@ -9,11 +9,12 @@ use crate::storage::PostgresRepository;
 use crate::tasks::TaskManager;
 use crate::clients::*;
 use crate::tasks::*;
+use crate::web::{WebServer, cache::DataCache}; // 新增：导入Web服务和数据缓存
 
 /// 任务调度器
 /// 
 /// 负责管理所有数据获取任务的生命周期
-/// 包括初始化、调度和监控
+/// 包括初始化、调度和监控，以及Web服务器启动
 pub struct Orchestrator {
     /// 配置
     config: Config,
@@ -21,6 +22,10 @@ pub struct Orchestrator {
     storage: Arc<PostgresRepository>,
     /// 任务管理器
     task_manager: TaskManager,
+    /// 数据缓存（新增）
+    cache: Arc<DataCache>,
+    /// Web服务器（新增）
+    web_server: WebServer,
 }
 
 impl Orchestrator {
@@ -41,11 +46,21 @@ impl Orchestrator {
                 .context("初始化数据库连接失败")?
         );
         
+        // 初始化数据缓存（新增）
+        let cache = Arc::new(DataCache::new());
+        
         // 创建任务管理器
         let mut task_manager = TaskManager::new();
         
         // 注册所有任务
-        Self::register_tasks(&mut task_manager, &config, storage.clone()).await?;
+        Self::register_tasks(&mut task_manager, &config, storage.clone(), cache.clone()).await?;
+        
+        // 创建Web服务器（新增）
+        let web_server = WebServer::new(
+            config.clone(),
+            cache.clone(),
+            Some(storage.clone()),
+        );
         
         info!("✅ 任务调度器初始化完成，共注册 {} 个任务", task_manager.get_tasks().len());
         
@@ -53,6 +68,8 @@ impl Orchestrator {
             config,
             storage,
             task_manager,
+            cache,
+            web_server,
         })
     }
     
@@ -61,10 +78,17 @@ impl Orchestrator {
     /// # 参数
     /// * `task_manager` - 任务管理器
     /// * `config` - 应用配置
+    /// * `storage` - 存储仓库
+    /// * `cache` - 数据缓存（新增）
     /// 
     /// # 返回
     /// * `Result<()>` - 成功或错误
-    async fn register_tasks(task_manager: &mut TaskManager, config: &Config, storage: Arc<PostgresRepository>) -> Result<()> {
+    async fn register_tasks(
+        task_manager: &mut TaskManager, 
+        config: &Config, 
+        storage: Arc<PostgresRepository>,
+        cache: Arc<DataCache>, // 新增参数
+    ) -> Result<()> {
         info!("📋 开始注册任务");
         
         // 注册加密货币市场数据任务
@@ -83,8 +107,6 @@ impl Orchestrator {
                     "hyperliquid".to_string(),
                 ]
             } else {
-                info!("📊 从配置文件读取到 {} 个监控币种: {:?}", 
-                      crypto_config.coins.len(), crypto_config.coins);
                 crypto_config.coins.clone()
             }
         } else {
@@ -96,186 +118,132 @@ impl Orchestrator {
             ]
         };
         
-        let crypto_interval = Duration::from_secs(
-            config.tasks.intervals.get("crypto_market").copied().unwrap_or(14400) as u64
-        );
+        info!("📊 配置的监控币种: {:?}", monitored_coins);
         
+        // 获取任务执行间隔
+        let crypto_interval = config.tasks.intervals
+            .get("crypto_market")
+            .copied()
+            .unwrap_or(14400); // 默认4小时
+        
+        // 创建加密货币市场数据任务（使用新的构建器模式）
         let crypto_task = CryptoMarketTaskBuilder::new()
-            .client(coingecko_client.clone())
-            .interval(crypto_interval)
-            .coin_ids(monitored_coins.clone())
             .name("CryptoMarketDataTask".to_string())
-            .build()?;
+            .client(coingecko_client)
+            .coin_ids(monitored_coins)
+            .interval(Duration::from_secs(crypto_interval))
+            .cache(cache.clone()) // 新增：设置缓存
+            .build()
+            .context("创建加密货币市场数据任务失败")?;
         
-        task_manager.register_task(Box::new(crypto_task));
-        info!("✅ 已注册加密货币市场数据任务");
-        info!("   📈 监控币种: {:?}", monitored_coins);
-        info!("   ⏰ 执行间隔: {} 秒 ({} 小时)", 
-              crypto_interval.as_secs(), 
-              crypto_interval.as_secs() / 3600);
+        // 注册任务
+        task_manager.register_task(Box::new(crypto_task))?;
         
-        // 如果有技术指标配置，记录配置信息
-        if let Some(crypto_config) = &config.crypto_monitoring {
-            if let Some(tech_config) = &crypto_config.technical_indicators {
-                info!("📊 技术指标配置:");
-                if let Some(rsi_period) = tech_config.rsi_period {
-                    info!("   RSI周期: {} 天", rsi_period);
-                }
-                if let Some(bollinger_period) = tech_config.bollinger_period {
-                    info!("   布林带周期: {} 天", bollinger_period);
-                }
-                if let Some(bollinger_std) = tech_config.bollinger_std_dev {
-                    info!("   布林带标准差: {}", bollinger_std);
-                }
-            }
-            
-            if let Some(data_config) = &crypto_config.data_collection {
-                info!("📋 数据收集配置:");
-                if let Some(history_days) = data_config.history_days {
-                    info!("   历史数据天数: {} 天", history_days);
-                }
-                if let Some(enable_tech) = data_config.enable_technical_indicators {
-                    info!("   技术指标计算: {}", if enable_tech { "启用" } else { "禁用" });
-                }
-            }
-        }
-        
-        // 保留原有的CoinGecko任务作为备用（如果需要）
-        if let Some(api_key) = &config.api_keys.coingecko_api_key {
-            let coingecko_interval = Duration::from_secs(
-                config.tasks.intervals.get("coingecko").copied().unwrap_or(300) as u64
-            );
-            
-            let coingecko_task = CoinGeckoTaskBuilder::new()
-                .client(coingecko_client)
-                .interval(coingecko_interval)
-                .build()?;
-            
-            task_manager.register_task(Box::new(coingecko_task));
-            info!("✅ 已注册传统CoinGecko任务");
-        }
-        
-        // 可以继续注册其他任务...
-        // 注册Dune任务
-        if let Some(_) = &config.api_keys.dune_api_key {
-            info!("✅ 已配置Dune API密钥（暂未实现任务）");
-        }
-        
-        // 注册Glassnode任务
-        if let Some(_) = &config.api_keys.glassnode_api_key {
-            info!("✅ 已配置Glassnode API密钥（暂未实现任务）");
-        }
-        
-        // 注册DeBank任务
-        if let Some(_) = &config.api_keys.debank_api_key {
-            info!("✅ 已配置DeBank API密钥（暂未实现任务）");
-        }
-        
-        info!("📋 任务注册完成");
+        info!("✅ 任务注册完成");
         Ok(())
     }
     
-    /// 启动任务调度器
+    /// 启动调度器
+    /// 
+    /// # 参数
+    /// * `web_port` - Web服务器端口（可选，默认3000）
     /// 
     /// # 返回
     /// * `Result<()>` - 成功或错误
-    pub async fn start(&self) -> Result<()> {
+    pub async fn start(&mut self, web_port: Option<u16>) -> Result<()> {
         info!("🚀 启动任务调度器");
         
-        // 执行健康检查
-        self.health_check().await?;
-        
-        // 启动任务调度循环
-        let mut interval = time::interval(Duration::from_secs(60)); // 每分钟检查一次
-        
-        loop {
-            interval.tick().await;
-            
-            // 检查并执行到期的任务
-            if let Err(e) = self.check_and_execute_tasks().await {
-                error!("❌ 任务执行检查失败: {}", e);
+        // 启动Web服务器（新增）
+        let port = web_port.unwrap_or(3000);
+        let web_server = self.web_server.clone();
+        let web_handle = tokio::spawn(async move {
+            if let Err(e) = web_server.start(port).await {
+                error!("❌ Web服务器启动失败: {}", e);
             }
-        }
-    }
-    
-    /// 健康检查
-    /// 
-    /// # 返回
-    /// * `Result<()>` - 成功或错误
-    async fn health_check(&self) -> Result<()> {
-        info!("🏥 正在执行健康检查");
+        });
         
-        // 检查数据库连接
-        if let Err(e) = self.storage.health_check().await {
-            error!("❌ 数据库健康检查失败: {}", e);
-            return Err(e);
-        }
+        // 启动任务管理器
+        let task_handle = tokio::spawn({
+            let mut task_manager = self.task_manager.clone();
+            let storage = self.storage.clone();
+            async move {
+                if let Err(e) = task_manager.start(storage).await {
+                    error!("❌ 任务管理器启动失败: {}", e);
+                }
+            }
+        });
         
-        // 检查所有任务的健康状态
-        for task in self.task_manager.get_tasks() {
-            let task_name = task.name();
-            match task.health_check().await {
-                Ok(is_healthy) => {
-                    if is_healthy {
-                        info!("✅ 任务 {} 健康状态良好", task_name);
-                    } else {
-                        warn!("⚠️ 任务 {} 健康状态不佳", task_name);
+        // 启动缓存清理任务（新增）
+        let cache_cleanup_handle = tokio::spawn({
+            let cache = self.cache.clone();
+            async move {
+                let mut cleanup_interval = time::interval(Duration::from_secs(3600)); // 每小时清理一次
+                loop {
+                    cleanup_interval.tick().await;
+                    let removed = cache.cleanup_expired_data(24); // 清理24小时前的数据
+                    if removed > 0 {
+                        info!("🧹 缓存清理完成，移除 {} 条过期数据", removed);
                     }
                 }
-                Err(e) => {
-                    error!("❌ 任务 {} 健康检查失败: {}", task_name, e);
-                }
             }
-        }
+        });
         
-        info!("✅ 健康检查完成");
-        Ok(())
-    }
-    
-    /// 检查并执行到期的任务
-    /// 
-    /// # 返回
-    /// * `Result<()>` - 成功或错误
-    async fn check_and_execute_tasks(&self) -> Result<()> {
-        debug!("🔍 检查待执行任务");
+        info!("✅ 所有服务已启动");
+        info!("🌐 Web仪表板: http://localhost:{}", port);
+        info!("📡 API端点: http://localhost:{}/api", port);
         
-        // 这里简化实现，每次检查时都执行所有任务
-        // 在实际应用中，应该根据任务的最后执行时间和间隔来决定是否执行
-        let results = self.task_manager.execute_all(&self.storage).await?;
-        
-        // 记录执行结果
-        for result in results {
-            if result.success {
-                info!("✅ 任务 {} 执行成功，获取 {} 条数据，耗时 {}ms", 
-                      result.task_name, result.metrics_count, result.execution_time_ms);
-            } else {
-                error!("❌ 任务 {} 执行失败: {}", 
-                      result.task_name, result.error.unwrap_or_else(|| "未知错误".to_string()));
+        // 等待所有任务完成（实际上会一直运行）
+        tokio::select! {
+            _ = web_handle => {
+                warn!("⚠️ Web服务器已停止");
+            }
+            _ = task_handle => {
+                warn!("⚠️ 任务管理器已停止");
+            }
+            _ = cache_cleanup_handle => {
+                warn!("⚠️ 缓存清理任务已停止");
             }
         }
         
         Ok(())
-    }
-    
-    /// 获取任务状态
-    /// 
-    /// # 返回
-    /// * `Vec<(String, String)>` - 任务名称和状态的列表
-    pub fn get_task_status(&self) -> Vec<(String, String)> {
-        self.task_manager.get_tasks()
-            .iter()
-            .map(|task| (task.name().to_string(), task.status().to_string()))
-            .collect()
     }
     
     /// 停止调度器
-    pub async fn stop(&self) -> Result<()> {
+    pub async fn stop(&mut self) -> Result<()> {
         info!("🛑 正在停止任务调度器");
         
-        // 这里可以添加清理逻辑
-        // 例如：等待正在运行的任务完成、关闭连接等
+        // 停止任务管理器
+        self.task_manager.stop().await?;
+        
+        // 清空缓存（新增）
+        self.cache.clear_all();
         
         info!("✅ 任务调度器已停止");
         Ok(())
     }
+    
+    /// 获取调度器状态
+    pub fn get_status(&self) -> OrchestratorStatus {
+        OrchestratorStatus {
+            task_count: self.task_manager.get_tasks().len(),
+            cache_size: self.cache.size(), // 新增：缓存大小
+            cache_stats: self.cache.get_stats(), // 新增：缓存统计
+        }
+    }
+    
+    /// 获取缓存引用（新增）
+    pub fn get_cache(&self) -> Arc<DataCache> {
+        self.cache.clone()
+    }
+}
+
+/// 调度器状态
+#[derive(Debug)]
+pub struct OrchestratorStatus {
+    /// 任务数量
+    pub task_count: usize,
+    /// 缓存大小（新增）
+    pub cache_size: usize,
+    /// 缓存统计（新增）
+    pub cache_stats: crate::web::cache::CacheStats,
 } 

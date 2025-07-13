@@ -163,11 +163,47 @@ impl CoinGeckoClient {
         })
     }
     
-    /// 获取代币价格
+    /// 获取简单价格信息
     /// 
     /// # 参数
     /// * `coin_ids` - 代币ID列表
-    /// * `vs_currency` - 对比货币（默认为"usd"）
+    /// * `vs_currencies` - 对比货币列表
+    /// 
+    /// # 返回
+    /// * `Result<HashMap<String, HashMap<String, f64>>>` - 价格信息或错误
+    pub async fn get_simple_price(&self, coin_ids: &[&str], vs_currencies: &[&str]) -> Result<HashMap<String, HashMap<String, f64>>> {
+        let coins_param = coin_ids.join(",");
+        let currencies_param = vs_currencies.join(",");
+        
+        let url = format!("{}/simple/price?ids={}&vs_currencies={}", 
+                         self.base_url, coins_param, currencies_param);
+        
+        debug!("📡 获取简单价格信息: {}", url);
+        
+        let response = self.client
+            .get(&url)
+            .timeout(self.timeout)
+            .send()
+            .await
+            .context("发送价格请求失败")?;
+        
+        if !response.status().is_success() {
+            return Err(anyhow!("CoinGecko API请求失败: {}", response.status()));
+        }
+        
+        let price_data: HashMap<String, HashMap<String, f64>> = response
+            .json()
+            .await
+            .context("解析价格数据失败")?;
+        
+        Ok(price_data)
+    }
+
+    /// 获取代币价格列表
+    /// 
+    /// # 参数
+    /// * `coin_ids` - 代币ID列表  
+    /// * `vs_currency` - 对比货币
     /// 
     /// # 返回
     /// * `Result<Vec<CoinPrice>>` - 代币价格列表或错误
