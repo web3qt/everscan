@@ -164,8 +164,8 @@ impl FearGreedTask {
             self.store_to_cache(&fear_greed_data, cache).await?;
         }
 
-        // 存储到数据库（如果需要）
-        self.store_fear_greed_data(&fear_greed_data, storage).await?;
+        // 只使用内存缓存，不存储到数据库
+        debug!("💾 贪婪恐惧指数数据已保存到内存缓存");
 
         info!("✅ 贪婪恐惧指数数据收集完成，生成 {} 条指标", metrics.len());
         Ok(metrics)
@@ -249,21 +249,6 @@ impl FearGreedTask {
         cache.set_fear_greed_index(cache_data).await;
 
         debug!("✅ 贪婪恐惧指数数据已存储到缓存");
-        Ok(())
-    }
-
-    /// 存储贪婪恐惧指数数据到数据库
-    /// 
-    /// # 参数
-    /// * `fear_greed_data` - 贪婪恐惧指数数据
-    /// * `storage` - 存储仓库
-    /// 
-    /// # 返回
-    /// * `Result<()>` - 成功或错误
-    async fn store_fear_greed_data(&self, _fear_greed_data: &FearGreedIndex, _storage: &PostgresRepository) -> Result<()> {
-        // 这里可以实现数据库存储逻辑
-        // 由于当前主要使用内存缓存，暂时不实现数据库存储
-        debug!("📝 贪婪恐惧指数数据存储到数据库（暂未实现）");
         Ok(())
     }
 }

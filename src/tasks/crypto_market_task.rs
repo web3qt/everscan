@@ -115,18 +115,8 @@ impl Task for CryptoMarketTask {
             }
         }
         
-        // 保存到数据库（如果需要）
-        if !all_metrics.is_empty() {
-            match storage.save_metrics(&all_metrics).await {
-                Ok(saved_count) => {
-                    info!("💾 成功保存 {} 条指标数据到数据库", saved_count);
-                }
-                Err(e) => {
-                    warn!("⚠️ 保存数据到数据库失败: {}", e);
-                    // 不影响任务成功状态，因为数据已缓存
-                }
-            }
-        }
+        // 只使用内存缓存，不保存到数据库
+        info!("💾 数据已保存到内存缓存，共 {} 条指标数据", all_metrics.len());
         
         self.set_status(TaskStatus::Completed);
         info!("✅ 加密货币市场数据任务完成: 成功更新 {}/{} 个币种", successful_updates, self.coin_ids.len());
@@ -207,8 +197,8 @@ impl CryptoMarketTask {
         // 转换为 AggregatedMetric 格式
         let metrics = self.convert_to_metrics(&market_data)?;
         
-        // 存储到数据库
-        self.store_market_data(&market_data, storage).await?;
+        // 只使用内存缓存，不存储到数据库
+        debug!("💾 {} 数据已保存到内存缓存", market_data.coin_price.symbol);
         
         Ok(metrics)
     }
@@ -302,15 +292,15 @@ impl CryptoMarketTask {
         Ok(metrics)
     }
     
-    /// 存储市场数据到数据库
-    async fn store_market_data(&self, market_data: &crate::clients::EnhancedMarketData, _storage: &PostgresRepository) -> Result<()> {
-        debug!("💾 正在存储 {} 的市场数据到数据库", market_data.coin_price.symbol);
-        
-        // 注意：这里我们不直接存储原始数据，而是通过 AggregatedMetric 系统存储
-        // 实际的存储会在 Task::execute 方法中通过 storage.save_metrics 完成
-        
-        debug!("✅ 市场数据已准备存储: {}", market_data.coin_price.symbol);
-        Ok(())
+    /// 获取RSI状态描述
+    fn get_rsi_status(rsi: f64) -> &'static str {
+        if rsi >= 70.0 {
+            "超买"
+        } else if rsi <= 30.0 {
+            "超卖"
+        } else {
+            "正常"
+        }
     }
 }
 
