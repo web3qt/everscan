@@ -46,5 +46,8 @@ cron = "0.12"
 # 异步trait
 async-trait = "0.1"
 
+# 版本锁定以避免edition2024问题
+base64ct = "1.6"
+
 [dev-dependencies]
 tokio-test = "0.4" 

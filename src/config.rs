@@ -10,6 +10,7 @@ use std::fs;
 /// - 数据库连接信息
 /// - 各个API的密钥
 /// - 任务调度配置
+/// - 加密货币监控配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// 数据库配置
@@ -20,6 +21,8 @@ pub struct Config {
     pub tasks: TasksConfig,
     /// 应用程序配置
     pub app: AppConfig,
+    /// 加密货币监控配置
+    pub crypto_monitoring: Option<CryptoMonitoringConfig>,
 }
 
 /// 数据库配置
@@ -46,6 +49,37 @@ pub struct ApiKeys {
     pub coingecko_api_key: Option<String>,
     /// Arkham Intelligence API密钥
     pub arkham_api_key: Option<String>,
+}
+
+/// 加密货币监控配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CryptoMonitoringConfig {
+    /// 要监控的币种列表（CoinGecko币种ID）
+    pub coins: Vec<String>,
+    /// 技术指标配置
+    pub technical_indicators: Option<TechnicalIndicatorsConfig>,
+    /// 数据收集配置
+    pub data_collection: Option<DataCollectionConfig>,
+}
+
+/// 技术指标配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TechnicalIndicatorsConfig {
+    /// RSI计算周期（天）
+    pub rsi_period: Option<u32>,
+    /// 布林带计算周期（天）
+    pub bollinger_period: Option<u32>,
+    /// 布林带标准差倍数
+    pub bollinger_std_dev: Option<f64>,
+}
+
+/// 数据收集配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataCollectionConfig {
+    /// 历史数据天数
+    pub history_days: Option<u32>,
+    /// 是否启用技术指标计算
+    pub enable_technical_indicators: Option<bool>,
 }
 
 /// 任务调度配置
@@ -128,6 +162,8 @@ impl Config {
             config.api_keys.arkham_api_key = Some(key);
         }
         
+
+        
         // 应用程序配置
         if let Ok(log_level) = env::var("RUST_LOG") {
             config.app.log_level = log_level;
@@ -144,8 +180,8 @@ impl Default for Config {
         task_intervals.insert("dune".to_string(), 3600); // 1小时
         task_intervals.insert("glassnode".to_string(), 3600); // 1小时
         task_intervals.insert("debank".to_string(), 1800); // 30分钟
-        task_intervals.insert("coingecko".to_string(), 300); // 5分钟
         task_intervals.insert("arkham".to_string(), 3600); // 1小时
+        task_intervals.insert("crypto_market".to_string(), 14400); // 4小时
         
         Self {
             database: DatabaseConfig {
@@ -163,7 +199,7 @@ impl Default for Config {
             tasks: TasksConfig {
                 intervals: task_intervals,
                 retry_count: 3,
-                timeout_seconds: 300,
+                timeout_seconds: 60,
             },
             app: AppConfig {
                 name: "EverScan".to_string(),
@@ -171,6 +207,21 @@ impl Default for Config {
                 log_level: "info".to_string(),
                 http_timeout_seconds: 30,
             },
+            crypto_monitoring: Some(CryptoMonitoringConfig {
+                coins: vec![
+                    "bitcoin".to_string(),
+                    "hyperliquid".to_string(),
+                ],
+                technical_indicators: Some(TechnicalIndicatorsConfig {
+                    rsi_period: Some(14),
+                    bollinger_period: Some(20),
+                    bollinger_std_dev: Some(2.0),
+                }),
+                data_collection: Some(DataCollectionConfig {
+                    history_days: Some(30),
+                    enable_technical_indicators: Some(true),
+                }),
+            }),
         }
     }
 } 

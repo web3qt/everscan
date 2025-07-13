@@ -1,8 +1,8 @@
-use sqlx::{Pool, Postgres, PgPool, Row};
+use sqlx::{PgPool, Row};
 use anyhow::{Result, Context};
 use tracing::{info, error, debug};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
+
 use std::time::Duration;
 
 use crate::models::{AggregatedMetric, MetricFilter, MetricStats};
@@ -150,97 +150,52 @@ impl PostgresRepository {
         Ok(saved_count)
     }
     
-    /// 根据过滤条件查询指标
+    /// 获取指标数据
     /// 
     /// # 参数
-    /// * `filter` - 查询过滤条件
+    /// * `filter` - 过滤条件
     /// 
     /// # 返回
-    /// * `Result<Vec<AggregatedMetric>>` - 查询结果或错误
+    /// * `Result<Vec<AggregatedMetric>>` - 指标数据列表或错误
     pub async fn get_metrics(&self, filter: &MetricFilter) -> Result<Vec<AggregatedMetric>> {
-        let mut query = String::from("SELECT * FROM aggregated_metrics WHERE 1=1");
-        let mut params: Vec<&(dyn sqlx::Encode<Postgres> + Send + Sync)> = Vec::new();
-        let mut param_count = 0;
+        debug!("🔍 正在获取指标数据，过滤条件: {:?}", filter);
         
-        // 构建动态查询条件
+        let mut query = "SELECT id, source, metric_name, value, timestamp, created_at, updated_at, metadata FROM aggregated_metrics WHERE 1=1".to_string();
+        
+        // 构建查询条件
         if let Some(source) = &filter.source {
-            param_count += 1;
-            query.push_str(&format!(" AND source = ${}", param_count));
-            params.push(source);
+            query.push_str(&format!(" AND source = '{}'", source));
         }
         
         if let Some(metric_name) = &filter.metric_name {
-            param_count += 1;
-            query.push_str(&format!(" AND metric_name = ${}", param_count));
-            params.push(metric_name);
+            query.push_str(&format!(" AND metric_name = '{}'", metric_name));
         }
         
         if let Some(time_range) = &filter.time_range {
-            param_count += 1;
-            query.push_str(&format!(" AND timestamp >= ${}", param_count));
-            params.push(&time_range.start);
-            
-            param_count += 1;
-            query.push_str(&format!(" AND timestamp <= ${}", param_count));
-            params.push(&time_range.end);
+            query.push_str(&format!(" AND timestamp >= '{}'", time_range.start.format("%Y-%m-%d %H:%M:%S")));
+            query.push_str(&format!(" AND timestamp <= '{}'", time_range.end.format("%Y-%m-%d %H:%M:%S")));
         }
         
         // 添加排序
         query.push_str(" ORDER BY timestamp DESC");
         
-        // 添加限制和偏移
+        // 添加分页
         if let Some(limit) = filter.limit {
-            param_count += 1;
-            query.push_str(&format!(" LIMIT ${}", param_count));
-            params.push(&limit);
+            query.push_str(&format!(" LIMIT {}", limit));
         }
         
         if let Some(offset) = filter.offset {
-            param_count += 1;
-            query.push_str(&format!(" OFFSET ${}", param_count));
-            params.push(&offset);
+            query.push_str(&format!(" OFFSET {}", offset));
         }
         
         debug!("📊 执行查询: {}", query);
         
-        // 这里由于sqlx的限制，我们需要手动构建查询
-        // 在实际应用中，建议使用查询构建器或更安全的方法
-        let metrics = match param_count {
-            0 => sqlx::query_as::<_, AggregatedMetric>(&query)
-                .fetch_all(&self.pool)
-                .await?,
-            1 => sqlx::query_as::<_, AggregatedMetric>(&query)
-                .bind(params[0])
-                .fetch_all(&self.pool)
-                .await?,
-            2 => sqlx::query_as::<_, AggregatedMetric>(&query)
-                .bind(params[0])
-                .bind(params[1])
-                .fetch_all(&self.pool)
-                .await?,
-            _ => {
-                // 对于更复杂的查询，我们使用更通用的方法
-                let rows = sqlx::query(&query)
-                    .fetch_all(&self.pool)
-                    .await?;
-                
-                rows.into_iter()
-                    .map(|row| AggregatedMetric {
-                        id: row.get("id"),
-                        source: row.get("source"),
-                        metric_name: row.get("metric_name"),
-                        value: row.get("value"),
-                        timestamp: row.get("timestamp"),
-                        created_at: row.get("created_at"),
-                        updated_at: row.get("updated_at"),
-                        metadata: row.get("metadata"),
-                    })
-                    .collect()
-            }
-        };
+        let metrics = sqlx::query_as::<_, AggregatedMetric>(&query)
+            .fetch_all(&self.pool)
+            .await
+            .context("获取指标数据失败")?;
         
-        debug!("📊 查询返回 {} 条记录", metrics.len());
-        
+        info!("✅ 成功获取 {} 条指标数据", metrics.len());
         Ok(metrics)
     }
     
@@ -333,5 +288,22 @@ impl PostgresRepository {
     /// 用于需要直接访问数据库的场景
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+    
+    /// 数据库健康检查
+    /// 
+    /// # 返回
+    /// * `Result<()>` - 成功或错误
+    pub async fn health_check(&self) -> Result<()> {
+        debug!("🏥 正在执行数据库健康检查");
+        
+        // 执行简单的查询来检查数据库连接
+        sqlx::query("SELECT 1")
+            .fetch_one(&self.pool)
+            .await
+            .context("数据库连接检查失败")?;
+        
+        info!("✅ 数据库健康检查通过");
+        Ok(())
     }
 } 

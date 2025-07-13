@@ -4,6 +4,7 @@ use serde_json::Value;
 use tracing::{info, debug, error};
 use std::time::Duration;
 use std::collections::HashMap;
+use chrono::{DateTime, Utc};
 
 use super::{ApiClient, HttpClientBuilder};
 
@@ -56,6 +57,63 @@ pub struct MarketData {
     pub market_cap_percentage: HashMap<String, f64>,
     /// 最后更新时间
     pub updated_at: i64,
+}
+
+/// 增强的代币市场数据（包含技术指标）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnhancedMarketData {
+    /// 基础价格信息
+    pub coin_price: CoinPrice,
+    /// 技术指标
+    pub technical_indicators: TechnicalIndicators,
+    /// 数据更新时间
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// 技术指标
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TechnicalIndicators {
+    /// 布林带
+    pub bollinger_bands: BollingerBands,
+    /// RSI（相对强弱指数）
+    pub rsi: RSI,
+}
+
+/// 布林带指标
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BollingerBands {
+    /// 上轨
+    pub upper: f64,
+    /// 中轨（移动平均线）
+    pub middle: f64,
+    /// 下轨
+    pub lower: f64,
+    /// 计算周期
+    pub period: u32,
+    /// 标准差倍数
+    pub std_dev_multiplier: f64,
+}
+
+/// RSI指标
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RSI {
+    /// RSI值
+    pub value: f64,
+    /// 计算周期
+    pub period: u32,
+    /// 超买阈值
+    pub overbought_threshold: f64,
+    /// 超卖阈值
+    pub oversold_threshold: f64,
+}
+
+/// 历史价格数据点
+#[derive(Debug, Clone, Deserialize)]
+pub struct PricePoint {
+    /// 时间戳（毫秒）
+    pub timestamp: i64,
+    /// 价格
+    pub price: f64,
 }
 
 /// 全球市场数据
@@ -331,6 +389,235 @@ impl CoinGeckoClient {
             .context("解析CoinGecko支持货币响应失败")?;
         
         Ok(currencies)
+    }
+
+    /// 获取代币的历史价格数据
+    /// 
+    /// # 参数
+    /// * `coin_id` - 代币ID（如 "bitcoin"）
+    /// * `days` - 历史天数
+    /// 
+    /// # 返回
+    /// * `Result<Vec<PricePoint>>` - 历史价格数据点列表
+    pub async fn get_coin_history(&self, coin_id: &str, days: u32) -> Result<Vec<PricePoint>> {
+        let url = format!("{}/coins/{}/market_chart", self.base_url, coin_id);
+        
+        debug!("📈 正在获取 {} 的历史价格数据（{}天）", coin_id, days);
+        
+        // 根据天数决定是否使用interval参数
+        // CoinGecko免费API: 2-90天会自动返回小时级数据，无需指定interval
+        let mut request = if days >= 2 && days <= 90 {
+            // 2-90天范围内，CoinGecko会自动返回小时级数据
+            self.client
+                .get(&url)
+                .query(&[
+                    ("vs_currency", "usd"),
+                    ("days", &days.to_string()),
+                ])
+        } else {
+            // 其他情况使用默认间隔
+            self.client
+                .get(&url)
+                .query(&[
+                    ("vs_currency", "usd"),
+                    ("days", &days.to_string()),
+                ])
+        };
+        
+        // 如果有API密钥，添加到请求头
+        if let Some(api_key) = &self.api_key {
+            request = request.header("x-cg-pro-api-key", api_key);
+        }
+        
+        let response = request
+            .send()
+            .await
+            .context("发送CoinGecko历史数据请求失败")?;
+        
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            error!("❌ CoinGecko历史数据请求失败: {} - {}", status, text);
+            return Err(anyhow!("CoinGecko历史数据请求失败: {} - {}", status, text));
+        }
+        
+        let result: Value = response
+            .json()
+            .await
+            .context("解析CoinGecko历史数据响应失败")?;
+        
+        // 解析价格数据
+        let mut price_points = Vec::new();
+        if let Some(prices) = result["prices"].as_array() {
+            for price_data in prices {
+                if let Some(price_array) = price_data.as_array() {
+                    if price_array.len() >= 2 {
+                        if let (Some(timestamp), Some(price)) = (
+                            price_array[0].as_i64(),
+                            price_array[1].as_f64()
+                        ) {
+                            price_points.push(PricePoint {
+                                timestamp,
+                                price,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        info!("✅ 获取到 {} 个历史价格数据点", price_points.len());
+        Ok(price_points)
+    }
+
+    /// 获取增强的市场数据（包含技术指标）
+    /// 
+    /// # 参数
+    /// * `coin_id` - 代币ID（如 "bitcoin"）
+    /// * `vs_currency` - 计价货币（如 "usd"）
+    /// 
+    /// # 返回
+    /// * `Result<EnhancedMarketData>` - 包含技术指标的增强市场数据
+    pub async fn get_enhanced_market_data(&self, coin_id: &str, vs_currency: &str) -> Result<EnhancedMarketData> {
+        info!("🔍 正在获取 {} 的增强市场数据", coin_id);
+        
+        // 获取当前价格数据
+        let coin_prices = self.get_coin_prices(&[coin_id.to_string()], vs_currency).await?;
+        let coin_price = coin_prices.into_iter().next()
+            .ok_or_else(|| anyhow!("未找到代币 {} 的价格数据", coin_id))?;
+        
+        // 获取历史价格数据用于计算技术指标
+        let history = self.get_coin_history(coin_id, 30).await?; // 获取30天历史数据
+        
+        // 计算技术指标
+        let technical_indicators = self.calculate_technical_indicators(&history)?;
+        
+        Ok(EnhancedMarketData {
+            coin_price,
+            technical_indicators,
+            updated_at: Utc::now(),
+        })
+    }
+
+    /// 计算技术指标
+    /// 
+    /// # 参数
+    /// * `price_history` - 历史价格数据
+    /// 
+    /// # 返回
+    /// * `Result<TechnicalIndicators>` - 计算得出的技术指标
+    fn calculate_technical_indicators(&self, price_history: &[PricePoint]) -> Result<TechnicalIndicators> {
+        if price_history.len() < 20 {
+            return Err(anyhow!("历史数据不足，无法计算技术指标（需要至少20个数据点）"));
+        }
+        
+        let prices: Vec<f64> = price_history.iter().map(|p| p.price).collect();
+        
+        // 计算布林带（20周期，2倍标准差）
+        let bollinger_bands = self.calculate_bollinger_bands(&prices, 20, 2.0)?;
+        
+        // 计算RSI（14周期）
+        let rsi = self.calculate_rsi(&prices, 14)?;
+        
+        Ok(TechnicalIndicators {
+            bollinger_bands,
+            rsi,
+        })
+    }
+
+    /// 计算布林带
+    /// 
+    /// # 参数
+    /// * `prices` - 价格数组
+    /// * `period` - 计算周期
+    /// * `std_dev_multiplier` - 标准差倍数
+    /// 
+    /// # 返回
+    /// * `Result<BollingerBands>` - 布林带数据
+    fn calculate_bollinger_bands(&self, prices: &[f64], period: usize, std_dev_multiplier: f64) -> Result<BollingerBands> {
+        if prices.len() < period {
+            return Err(anyhow!("价格数据不足，无法计算布林带"));
+        }
+        
+        // 取最近的数据计算
+        let recent_prices = &prices[prices.len() - period..];
+        
+        // 计算移动平均线（中轨）
+        let middle = recent_prices.iter().sum::<f64>() / period as f64;
+        
+        // 计算标准差
+        let variance = recent_prices.iter()
+            .map(|price| (price - middle).powi(2))
+            .sum::<f64>() / period as f64;
+        let std_dev = variance.sqrt();
+        
+        // 计算上轨和下轨
+        let upper = middle + (std_dev_multiplier * std_dev);
+        let lower = middle - (std_dev_multiplier * std_dev);
+        
+        Ok(BollingerBands {
+            upper,
+            middle,
+            lower,
+            period: period as u32,
+            std_dev_multiplier,
+        })
+    }
+
+    /// 计算RSI（相对强弱指数）
+    /// 
+    /// # 参数
+    /// * `prices` - 价格数组
+    /// * `period` - 计算周期
+    /// 
+    /// # 返回
+    /// * `Result<RSI>` - RSI数据
+    fn calculate_rsi(&self, prices: &[f64], period: usize) -> Result<RSI> {
+        if prices.len() < period + 1 {
+            return Err(anyhow!("价格数据不足，无法计算RSI"));
+        }
+        
+        // 计算价格变化
+        let mut gains = Vec::new();
+        let mut losses = Vec::new();
+        
+        for i in 1..prices.len() {
+            let change = prices[i] - prices[i - 1];
+            if change > 0.0 {
+                gains.push(change);
+                losses.push(0.0);
+            } else {
+                gains.push(0.0);
+                losses.push(-change);
+            }
+        }
+        
+        if gains.len() < period {
+            return Err(anyhow!("价格变化数据不足，无法计算RSI"));
+        }
+        
+        // 取最近的数据计算
+        let recent_gains = &gains[gains.len() - period..];
+        let recent_losses = &losses[losses.len() - period..];
+        
+        // 计算平均收益和平均损失
+        let avg_gain = recent_gains.iter().sum::<f64>() / period as f64;
+        let avg_loss = recent_losses.iter().sum::<f64>() / period as f64;
+        
+        // 计算RSI
+        let rsi_value = if avg_loss == 0.0 {
+            100.0 // 如果没有损失，RSI为100
+        } else {
+            let rs = avg_gain / avg_loss;
+            100.0 - (100.0 / (1.0 + rs))
+        };
+        
+        Ok(RSI {
+            value: rsi_value,
+            period: period as u32,
+            overbought_threshold: 70.0,
+            oversold_threshold: 30.0,
+        })
     }
 }
 

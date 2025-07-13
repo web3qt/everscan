@@ -6,7 +6,7 @@ use std::time::Duration;
 use tracing::{info, debug, error};
 use chrono::Utc;
 
-use crate::clients::CoinGeckoClient;
+use crate::clients::{CoinGeckoClient, ApiClient};
 use crate::models::{AggregatedMetric, MetricBuilder, DataSource};
 use crate::storage::PostgresRepository;
 use super::{Task, TaskStatus};

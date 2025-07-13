@@ -1,12 +1,16 @@
-pub mod dune_task;
-pub mod glassnode_task;
-pub mod debank_task;
+// pub mod dune_task;
+// pub mod glassnode_task;
+// pub mod debank_task;
 pub mod coingecko_task;
+pub mod crypto_market_task;
 
-pub use dune_task::*;
-pub use glassnode_task::*;
-pub use debank_task::*;
+
+// pub use dune_task::*;
+// pub use glassnode_task::*;
+// pub use debank_task::*;
 pub use coingecko_task::*;
+pub use crypto_market_task::*;
+
 
 use anyhow::Result;
 use async_trait::async_trait;

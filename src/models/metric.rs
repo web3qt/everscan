@@ -42,6 +42,8 @@ pub enum DataSource {
     CoinGecko,
     /// Arkham Intelligence
     Arkham,
+    /// Bitget
+    Bitget,
 }
 
 impl DataSource {
@@ -53,6 +55,7 @@ impl DataSource {
             DataSource::DeBank => "debank",
             DataSource::CoinGecko => "coingecko",
             DataSource::Arkham => "arkham",
+            DataSource::Bitget => "bitget",
         }
     }
 }
