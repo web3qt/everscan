@@ -411,6 +411,15 @@
                 </div>
                 <div id="fear-greed-content" class="loading">加载中</div>
             </div>
+
+            <!-- 山寨季节指数卡片 -->
+            <div class="card" id="altcoin-season-card">
+                <div class="card-header">
+                    <div class="card-icon">🌊</div>
+                    <div class="card-title">山寨季节指数</div>
+                </div>
+                <div id="altcoin-season-content" class="loading">加载中</div>
+            </div>
         </div>
     </div>
 
@@ -525,10 +534,186 @@
             `;
         }
 
+        // 渲染山寨季节指数
+        function renderAltcoinSeasonData(data) {
+            // 根据指数值确定颜色和图标
+            let seasonColor, seasonIcon, seasonDescription;
+            
+            if (data.value <= 25) {
+                seasonColor = '#f56565'; // 红色 - 比特币季节
+                seasonIcon = '₿';
+                seasonDescription = '比特币主导市场';
+            } else if (data.value <= 74) {
+                seasonColor = '#4299e1'; // 蓝色 - 平衡市场
+                seasonIcon = '⚖️';
+                seasonDescription = '市场相对平衡';
+            } else {
+                seasonColor = '#48bb78'; // 绿色 - 山寨币季节
+                seasonIcon = '🚀';
+                seasonDescription = '山寨币表现强劲';
+            }
+
+            return `
+                <div class="price-section">
+                    <div class="price" style="color: ${seasonColor};">${seasonIcon} ${data.value}</div>
+                    <div class="price-change" style="background: ${seasonColor}; color: white;">
+                        ${data.classification_zh}
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">📊 当前状态</div>
+                        <div class="stat-value">${seasonDescription}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">📈 表现优异币种</div>
+                        <div class="stat-value">${data.outperforming_count}/${data.total_count}</div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">📋 优势比例</div>
+                        <div class="stat-value">${data.outperforming_percentage.toFixed(1)}%</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">⏰ 更新时间</div>
+                        <div class="stat-value">${new Date(data.timestamp).toLocaleTimeString('zh-CN')}</div>
+                    </div>
+                </div>
+
+                <div class="stat-item" style="margin-top: 20px;">
+                    <div class="stat-label">💡 投资建议</div>
+                    <div class="stat-value" style="font-size: 1rem; line-height: 1.4;">${data.market_advice}</div>
+                </div>
+            `;
+        }
+
+        // 模拟HYPE数据渲染（当API失败时使用）
+        function renderMockHypeData() {
+            return `
+                <div class="price-section">
+                    <div class="price">$2.45</div>
+                    <div class="price-change positive">
+                        ↗ 5.23%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">24h 交易量</div>
+                        <div class="stat-value">$125.6M</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">市值</div>
+                        <div class="stat-value">$2.45B</div>
+                    </div>
+                </div>
+
+                <div class="technical-indicators">
+                    <div class="indicator-title">📊 技术指标</div>
+                    
+                    <div class="rsi-indicator">
+                        <div class="stat-label">RSI (正常)</div>
+                        <div class="rsi-bar">
+                            <div class="rsi-fill normal" style="width: 55%">
+                                <div class="rsi-value">55.0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">布林带上轨</div>
+                            <div class="stat-value">$2.68</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">布林带下轨</div>
+                            <div class="stat-value">$2.22</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="error" style="margin-top: 15px; font-size: 0.9rem; opacity: 0.7;">
+                    ⚠️ 显示模拟数据 - API连接失败
+                </div>
+            `;
+        }
+
+        // 模拟恐惧贪婪指数数据渲染（当API失败时使用）
+        function renderMockFearGreedData() {
+            return `
+                <div class="fear-greed-meter">
+                    <div class="meter-circle">
+                        <div class="meter-inner">
+                            <div class="fear-greed-value">42</div>
+                            <div class="fear-greed-label">恐惧</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">💡 投资建议</div>
+                    <div class="stat-value" style="font-size: 1rem; line-height: 1.4;">市场情绪偏向恐惧，可能是逢低买入的机会。建议分批建仓，控制风险。</div>
+                </div>
+                
+                <div class="error" style="margin-top: 15px; font-size: 0.9rem; opacity: 0.7;">
+                    ⚠️ 显示模拟数据 - API连接失败
+                </div>
+            `;
+        }
+
+        // 模拟山寨季节指数数据渲染（当API失败时使用）
+        function renderMockAltcoinSeasonData() {
+            const seasonColor = '#4299e1'; // 蓝色 - 平衡市场
+            const seasonIcon = '⚖️';
+            const seasonDescription = '市场相对平衡';
+            
+            return `
+                <div class="price-section">
+                    <div class="price" style="color: ${seasonColor};">${seasonIcon} 45</div>
+                    <div class="price-change" style="background: ${seasonColor}; color: white;">
+                        平衡市场
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">📊 当前状态</div>
+                        <div class="stat-value">${seasonDescription}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">📈 表现优异币种</div>
+                        <div class="stat-value">45/100</div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">📋 优势比例</div>
+                        <div class="stat-value">45.0%</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">⏰ 更新时间</div>
+                        <div class="stat-value">${new Date().toLocaleTimeString('zh-CN')}</div>
+                    </div>
+                </div>
+
+                <div class="stat-item" style="margin-top: 20px;">
+                    <div class="stat-label">💡 投资建议</div>
+                    <div class="stat-value" style="font-size: 1rem; line-height: 1.4;">当前市场处于平衡状态，比特币和山寨币表现相当。建议保持多元化投资组合。</div>
+                </div>
+                
+                <div class="error" style="margin-top: 15px; font-size: 0.9rem; opacity: 0.7;">
+                    ⚠️ 显示模拟数据 - API连接失败
+                </div>
+            `;
+        }
+
         // 加载HYPE数据
         async function loadHypeData() {
             try {
-                const response = await fetch('/api/market-data/hyperliquid');
+                const response = await fetch('/api/market-data/hype');
                 if (!response.ok) throw new Error('网络错误');
                 
                 const data = await response.json();
@@ -539,8 +724,8 @@
                 }
             } catch (error) {
                 console.error('加载HYPE数据失败:', error);
-                document.getElementById('hype-content').innerHTML = 
-                    `<div class="error">❌ 加载失败: ${error.message}</div>`;
+                // 显示友好的错误信息和模拟数据
+                document.getElementById('hype-content').innerHTML = renderMockHypeData();
             }
         }
 
@@ -558,8 +743,27 @@
                 }
             } catch (error) {
                 console.error('加载恐惧贪婪指数失败:', error);
-                document.getElementById('fear-greed-content').innerHTML = 
-                    `<div class="error">❌ 加载失败: ${error.message}</div>`;
+                // 显示友好的错误信息和模拟数据
+                document.getElementById('fear-greed-content').innerHTML = renderMockFearGreedData();
+            }
+        }
+
+        // 加载山寨季节指数
+        async function loadAltcoinSeasonData() {
+            try {
+                const response = await fetch('/api/altcoin-season-index');
+                if (!response.ok) throw new Error('网络错误');
+                
+                const data = await response.json();
+                if (data.success && data.data) {
+                    document.getElementById('altcoin-season-content').innerHTML = renderAltcoinSeasonData(data.data);
+                } else {
+                    throw new Error(data.error || '数据格式错误');
+                }
+            } catch (error) {
+                console.error('加载山寨季节指数失败:', error);
+                // 显示友好的错误信息和模拟数据
+                document.getElementById('altcoin-season-content').innerHTML = renderMockAltcoinSeasonData();
             }
         }
 
@@ -567,19 +771,22 @@
         function refreshData() {
             document.getElementById('hype-content').innerHTML = '<div class="loading">刷新中</div>';
             document.getElementById('fear-greed-content').innerHTML = '<div class="loading">刷新中</div>';
+            document.getElementById('altcoin-season-content').innerHTML = '<div class="loading">刷新中</div>';
             
             loadHypeData();
             loadFearGreedData();
+            loadAltcoinSeasonData();
         }
 
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadHypeData();
             loadFearGreedData();
+            loadAltcoinSeasonData();
             
             // 每5分钟自动刷新
             setInterval(refreshData, 5 * 60 * 1000);
         });
     </script>
 </body>
-</html> 
+</html>

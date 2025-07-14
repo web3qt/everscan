@@ -1,227 +1,151 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::env;
 use anyhow::{Result, Context};
+use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
-
-/// 应用程序配置结构
-/// 
-/// 包含所有必要的配置信息：
-/// - 数据库连接信息
-/// - 各个API的密钥
-/// - 任务调度配置
-/// - 加密货币监控配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    /// 数据库配置
-    pub database: DatabaseConfig,
-    /// API密钥配置
-    pub api_keys: ApiKeys,
-    /// 任务调度配置
-    pub tasks: TasksConfig,
-    /// 应用程序配置
-    pub app: AppConfig,
-    /// 加密货币监控配置
-    pub crypto_monitoring: Option<CryptoMonitoringConfig>,
-}
-
-/// 数据库配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DatabaseConfig {
-    /// 数据库连接URL
-    pub url: String,
-    /// 最大连接数
-    pub max_connections: u32,
-    /// 连接超时时间（秒）
-    pub timeout_seconds: u64,
-}
-
-/// API密钥配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiKeys {
-    /// Dune Analytics API密钥
-    pub dune_api_key: Option<String>,
-    /// Glassnode API密钥
-    pub glassnode_api_key: Option<String>,
-    /// DeBank API密钥
-    pub debank_api_key: Option<String>,
-    /// CoinGecko API密钥（可选，有免费额度）
-    pub coingecko_api_key: Option<String>,
-    /// Arkham Intelligence API密钥
-    pub arkham_api_key: Option<String>,
-}
-
-/// 加密货币监控配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CryptoMonitoringConfig {
-    /// 要监控的币种列表（CoinGecko币种ID）
-    pub coins: Vec<String>,
-    /// 技术指标配置
-    pub technical_indicators: Option<TechnicalIndicatorsConfig>,
-    /// 数据收集配置
-    pub data_collection: Option<DataCollectionConfig>,
-}
-
-/// 技术指标配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TechnicalIndicatorsConfig {
-    /// RSI计算周期（天）
-    pub rsi_period: Option<u32>,
-    /// 布林带计算周期（天）
-    pub bollinger_period: Option<u32>,
-    /// 布林带标准差倍数
-    pub bollinger_std_dev: Option<f64>,
-}
-
-/// 数据收集配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DataCollectionConfig {
-    /// 历史数据天数
-    pub history_days: Option<u32>,
-    /// 是否启用技术指标计算
-    pub enable_technical_indicators: Option<bool>,
-}
-
-/// 任务调度配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TasksConfig {
-    /// 任务执行间隔配置（任务名 -> 间隔秒数）
-    pub intervals: HashMap<String, u64>,
-    /// 任务重试次数
-    pub retry_count: u32,
-    /// 任务超时时间（秒）
-    pub timeout_seconds: u64,
-}
+use tracing::info;
 
 /// 应用程序配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// 应用程序名称
-    pub name: String,
-    /// 版本
-    pub version: String,
-    /// 日志级别
-    pub log_level: String,
-    /// HTTP客户端超时时间（秒）
-    pub http_timeout_seconds: u64,
+    /// Web服务器配置
+    pub server: ServerConfig,
+    /// 数据源配置
+    pub data_sources: DataSourcesConfig,
+    /// 监控币种配置
+    pub monitoring: MonitoringConfig,
 }
 
-impl Config {
-    /// 加载配置
+/// Web服务器配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    /// 服务器监听地址
+    pub host: String,
+    /// 服务器监听端口
+    pub port: u16,
+}
+
+/// 数据源配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataSourcesConfig {
+    /// CoinMarketCap配置
+    pub coinmarketcap: ApiConfig,
+    /// Glassnode配置（预留）
+    pub glassnode: ApiConfig,
+    /// DeBankAPI配置（预留）
+    pub debank: ApiConfig,
+    /// DuneAPI配置（预留）
+    pub dune: ApiConfig,
+}
+
+/// API配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiConfig {
+    /// API密钥
+    pub api_key: Option<String>,
+    /// 请求间隔（毫秒）
+    pub request_interval_ms: u64,
+    /// 请求超时时间（秒）
+    pub timeout_seconds: u64,
+}
+
+/// 监控币种配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonitoringConfig {
+    /// 需要监控的币种ID列表
+    pub coins: Vec<String>,
+    /// 数据更新间隔（秒）
+    pub update_interval_seconds: u64,
+}
+
+impl AppConfig {
+    /// 从配置文件加载配置
     /// 
-    /// 优先级：
-    /// 1. 环境变量
-    /// 2. config.toml文件
-    /// 3. 默认值
-    pub async fn load() -> Result<Self> {
-        // 首先尝试从config.toml文件加载
-        let config = if let Ok(config_str) = fs::read_to_string("config.toml") {
-            toml::from_str(&config_str)
-                .context("解析config.toml文件失败")?
-        } else {
-            // 如果没有配置文件，使用默认配置
-            Self::default()
-        };
+    /// # 参数
+    /// * `config_path` - 配置文件路径
+    /// 
+    /// # 返回
+    /// * `Result<Self>` - 配置实例或错误
+    pub fn from_file(config_path: &str) -> Result<Self> {
+        info!("📖 正在加载配置文件: {}", config_path);
         
-        // 然后从环境变量覆盖配置
-        let config = Self::override_from_env(config)?;
+        let content = fs::read_to_string(config_path)
+            .with_context(|| format!("无法读取配置文件: {}", config_path))?;
         
+        let mut config: AppConfig = toml::from_str(&content)
+            .with_context(|| format!("无法解析配置文件: {}", config_path))?;
+        
+        // 从环境变量覆盖配置
+        config.override_from_env()?;
+        
+        info!("✅ 配置文件加载成功");
         Ok(config)
     }
     
     /// 从环境变量覆盖配置
-    fn override_from_env(mut config: Self) -> Result<Self> {
-        // 数据库配置
-        if let Ok(db_url) = env::var("DATABASE_URL") {
-            config.database.url = db_url;
+    fn override_from_env(&mut self) -> Result<()> {
+        // 服务器配置
+        if let Ok(host) = env::var("SERVER_HOST") {
+            self.server.host = host;
         }
         
-        if let Ok(max_conn) = env::var("DATABASE_MAX_CONNECTIONS") {
-            config.database.max_connections = max_conn.parse()
-                .context("解析DATABASE_MAX_CONNECTIONS失败")?;
+        if let Ok(port) = env::var("SERVER_PORT") {
+            self.server.port = port.parse()
+                .context("解析SERVER_PORT失败")?;
         }
         
-        // API密钥配置
-        if let Ok(key) = env::var("DUNE_API_KEY") {
-            config.api_keys.dune_api_key = Some(key);
+        // API密钥配置        
+        if let Ok(api_key) = env::var("COINMARKETCAP_API_KEY") {
+            self.data_sources.coinmarketcap.api_key = Some(api_key);
         }
         
-        if let Ok(key) = env::var("GLASSNODE_API_KEY") {
-            config.api_keys.glassnode_api_key = Some(key);
+        if let Ok(api_key) = env::var("GLASSNODE_API_KEY") {
+            self.data_sources.glassnode.api_key = Some(api_key);
         }
         
-        if let Ok(key) = env::var("DEBANK_API_KEY") {
-            config.api_keys.debank_api_key = Some(key);
+        if let Ok(api_key) = env::var("DEBANK_API_KEY") {
+            self.data_sources.debank.api_key = Some(api_key);
         }
         
-        if let Ok(key) = env::var("COINGECKO_API_KEY") {
-            config.api_keys.coingecko_api_key = Some(key);
+        if let Ok(api_key) = env::var("DUNE_API_KEY") {
+            self.data_sources.dune.api_key = Some(api_key);
         }
         
-        if let Ok(key) = env::var("ARKHAM_API_KEY") {
-            config.api_keys.arkham_api_key = Some(key);
-        }
-        
-
-        
-        // 应用程序配置
-        if let Ok(log_level) = env::var("RUST_LOG") {
-            config.app.log_level = log_level;
-        }
-        
-        Ok(config)
+        Ok(())
     }
-}
-
-impl Default for Config {
-    /// 提供默认配置
-    fn default() -> Self {
-        let mut task_intervals = HashMap::new();
-        task_intervals.insert("dune".to_string(), 3600); // 1小时
-        task_intervals.insert("glassnode".to_string(), 3600); // 1小时
-        task_intervals.insert("debank".to_string(), 1800); // 30分钟
-        task_intervals.insert("arkham".to_string(), 3600); // 1小时
-        task_intervals.insert("crypto_market".to_string(), 14400); // 4小时
-        
+    
+    /// 创建默认配置
+    pub fn default() -> Self {
         Self {
-            database: DatabaseConfig {
-                url: "postgresql://localhost/everscan".to_string(),
-                max_connections: 10,
-                timeout_seconds: 30,
+            server: ServerConfig {
+                host: "0.0.0.0".to_string(),
+                port: 3000,
             },
-            api_keys: ApiKeys {
-                dune_api_key: None,
-                glassnode_api_key: None,
-                debank_api_key: None,
-                coingecko_api_key: None,
-                arkham_api_key: None,
+            data_sources: DataSourcesConfig {
+                coinmarketcap: ApiConfig {
+                    api_key: None,
+                    request_interval_ms: 1000,
+                    timeout_seconds: 30,
+                },
+                glassnode: ApiConfig {
+                    api_key: None,
+                    request_interval_ms: 1000,
+                    timeout_seconds: 30,
+                },
+                debank: ApiConfig {
+                    api_key: None,
+                    request_interval_ms: 1000,
+                    timeout_seconds: 30,
+                },
+                dune: ApiConfig {
+                    api_key: None,
+                    request_interval_ms: 1000,
+                    timeout_seconds: 30,
+                },
             },
-            tasks: TasksConfig {
-                intervals: task_intervals,
-                retry_count: 3,
-                timeout_seconds: 60,
+            monitoring: MonitoringConfig {
+                coins: vec!["hyperliquid".to_string()],
+                update_interval_seconds: 14400, // 4小时
             },
-            app: AppConfig {
-                name: "EverScan".to_string(),
-                version: "0.1.0".to_string(),
-                log_level: "info".to_string(),
-                http_timeout_seconds: 30,
-            },
-            crypto_monitoring: Some(CryptoMonitoringConfig {
-                coins: vec![
-                    "bitcoin".to_string(),
-                    "hyperliquid".to_string(),
-                ],
-                technical_indicators: Some(TechnicalIndicatorsConfig {
-                    rsi_period: Some(14),
-                    bollinger_period: Some(20),
-                    bollinger_std_dev: Some(2.0),
-                }),
-                data_collection: Some(DataCollectionConfig {
-                    history_days: Some(30),
-                    enable_technical_indicators: Some(true),
-                }),
-            }),
         }
     }
 } 

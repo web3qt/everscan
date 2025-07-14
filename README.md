@@ -1,204 +1,256 @@
-# 🌟 EverScan - 区块链数据聚合平台
+# EverScan 区块链数据聚合平台
 
-EverScan 是一个现代化的区块链数据聚合平台，专注于实时监控加密货币市场数据和技术指标分析。
+🚀 **EverScan** 是一个现代化的区块链数据聚合平台，专注于提供实时的加密货币市场数据、技术指标分析和市场情绪监控。
 
+## ✨ 主要功能
 
-## ✨ 特性
+### 📊 核心数据展示
 
-### 🚀 HYPE Token 专项监控
-- **专注监控**: 当前专门监控 Hyperliquid (HYPE) 代币
-- **实时数据**: 自动获取最新价格、交易量、市值信息
-- **技术指标**: 内置 RSI、布林带等技术分析工具
-- **智能缓存**: 高效的数据缓存机制，减少API调用
+- **HYPE代币监控**: 实时价格、24小时变化、交易量、市值
+- **技术指标分析**: RSI指标、布林带上下轨
+- **恐惧贪婪指数**: 市场情绪监控和投资建议
+- **山寨季节指数**: 山寨币vs比特币表现对比分析
 
-### 😱 市场情绪分析
-- **恐惧贪婪指数**: 实时获取市场情绪指标
-- **中文本地化**: 完整的中文情绪描述和投资建议
-- **直观展示**: 动漫风格的圆形指数表盘
+### 🎨 用户界面特色
 
-### 🎨 动漫风格界面
-- **卡片式设计**: 现代化的卡片布局，信息一目了然
-- **动漫美学**: 渐变色彩、圆角设计、动态效果
-- **响应式布局**: 完美适配各种设备屏幕
-- **实时刷新**: 自动更新数据，手动刷新按钮
+- **响应式设计**: 支持桌面和移动设备
+- **实时数据更新**: 每5分钟自动刷新
+- **优雅的卡片布局**: 清晰的数据可视化
+- **智能错误处理**: API失败时显示模拟数据
+- **现代化UI**: 渐变背景、动画效果、阴影设计
 
 ### 🔧 技术架构
-- **Rust 后端**: 高性能、内存安全的后端服务
-- **Axum 框架**: 现代化的异步 Web 框架
-- **多数据源**: 支持 CoinGecko、Alternative.me 等多个数据源
-- **RESTful API**: 标准化的 API 接口设计
+
+- **后端**: Rust + Axum Web框架
+- **前端**: 原生HTML/CSS/JavaScript
+- **数据源**: CoinMarketCap API
+- **缓存系统**: 内存缓存优化性能
+- **任务调度**: 异步数据采集任务
 
 ## 🚀 快速开始
 
 ### 环境要求
 
 - Rust 1.70+
-- Cargo (随 Rust 安装)
+- CoinMarketCap API密钥（可选，有免费额度）
 
-### 安装运行
+### 安装步骤
 
 1. **克隆项目**
+
 ```bash
 git clone <repository-url>
 cd everscan
 ```
 
-2. **配置设置**
+2. **配置环境变量**
+
 ```bash
-# 复制配置文件
-cp config.toml.example config.toml
+# 复制环境变量模板
+cp .env.example .env
 
-# 编辑配置（可选）
-# 默认配置已设置为只监控 HYPE 代币
+# 编辑 .env 文件，添加你的API密钥
+COINMARKETCAP_API_KEY=your_api_key_here
 ```
 
-3. **运行程序**
+3. **配置应用**
+
 ```bash
-# 测试模式（显示详细日志）
-RUST_LOG=info EVERSCAN_TEST_MODE=true cargo run
-
-# 生产模式
-RUST_LOG=info cargo run
+# 编辑 config.toml 文件
+# 可以修改服务器端口、监控币种等配置
 ```
 
-4. **访问界面**
-```
-打开浏览器访问: http://localhost:3000
-```
+4. **构建和运行**
 
-## 🎮 界面预览
-
-### 主仪表板
-- **HYPE Token 卡片**: 显示实时价格、24h涨跌、交易量、市值
-- **技术指标**: RSI 进度条、布林带上下轨
-- **恐惧贪婪指数**: 动态圆形表盘显示市场情绪
-
-### 动漫风格特色
-- 🌈 渐变背景和卡片边框
-- ✨ 悬停动画效果
-- 🎯 圆角设计和阴影效果
-- 📱 响应式移动端适配
-
-## 📊 API 接口
-
-### HYPE 数据接口
 ```bash
-# 获取 HYPE 代币数据
-GET /api/market-data/hyperliquid
+# 开发模式运行
+cargo run --bin everscan
 
-# 响应示例
-{
-  "success": true,
-  "data": {
-    "current_price": 47.93,
-    "price_change_24h": 2.23,
-    "total_volume": 412943395,
-    "market_cap": 15979991260,
-    "rsi": 77.75,
-    "bollinger_upper": 48.44,
-    "bollinger_lower": 45.05
-  }
-}
+# 或者先构建再运行
+cargo build --release
+./target/release/everscan
 ```
 
-### 恐惧贪婪指数接口
-```bash
-# 获取恐惧贪婪指数
-GET /api/fear-greed-index
+5. **访问应用**
 
-# 响应示例
-{
-  "success": true,
-  "data": {
-    "value": 74,
-    "classification": "Greed",
-    "chinese_classification": "贪婪",
-    "investment_advice": "市场贪婪，注意风险",
-    "sentiment_chinese": "贪婪"
-  }
-}
+```
+打开浏览器访问: http://localhost:3001
 ```
 
-### 系统状态接口
-```bash
-# 缓存统计
-GET /api/stats
+## 📁 项目结构
 
-# 健康检查
+```
+everscan/
+├── src/
+│   ├── bin/                    # 可执行文件
+│   │   ├── everscan.rs         # 主程序入口
+│   │   └── test_*.rs           # 测试程序
+│   ├── clients/                # API客户端
+│   │   └── coinmarketcap_client.rs
+│   ├── models/                 # 数据模型
+│   ├── tasks/                  # 数据采集任务
+│   │   ├── crypto_market_task.rs
+│   │   ├── fear_greed_task.rs
+│   │   └── altcoin_season_task.rs
+│   ├── web/                    # Web服务
+│   │   ├── api.rs              # API路由
+│   │   ├── cache.rs            # 数据缓存
+│   │   └── websocket.rs        # WebSocket支持
+│   ├── config.rs               # 配置管理
+│   └── main.rs                 # 应用入口
+├── static/                     # 静态文件
+│   └── dashboard.html          # 前端页面
+├── config.toml                 # 应用配置
+├── Cargo.toml                  # Rust依赖配置
+└── README.md                   # 项目文档
+```
+
+## 🔌 API 接口
+
+### 健康检查
+
+```
 GET /api/health
+```
+
+### 市场数据
+
+```
+GET /api/market-data/{coin_id}    # 获取指定币种数据
+GET /api/market-data              # 获取所有监控币种数据
+```
+
+### 市场指标
+
+```
+GET /api/fear-greed-index         # 恐惧贪婪指数
+GET /api/altcoin-season-index     # 山寨季节指数
+```
+
+### 系统信息
+
+```
+GET /api/cache/stats              # 缓存统计信息
 ```
 
 ## ⚙️ 配置说明
 
-### 监控币种配置
+### config.toml 主要配置项
+
 ```toml
-[crypto_monitoring]
-# 当前只监控 HYPE 代币
-coins = [
-    "hyperliquid",      # HYPE代币
-    # 可以添加更多币种:
-    # "bitcoin",        # 比特币 (BTC)
-    # "ethereum",       # 以太坊 (ETH)
-]
+[server]
+host = "0.0.0.0"          # 服务器地址
+port = 3001               # 服务器端口
+
+[data_sources.coinmarketcap]
+api_key = ""              # CoinMarketCap API密钥
+timeout_seconds = 30      # 请求超时时间
+
+[monitoring]
+coins = ["hyperliquid"]   # 监控的币种列表
+update_interval_seconds = 14400  # 数据更新间隔（4小时）
 ```
 
-### 技术指标配置
-```toml
-[crypto_monitoring.technical_indicators]
-rsi_period = 14         # RSI计算周期（天）
-bollinger_period = 20   # 布林带计算周期（天）
-bollinger_std_dev = 2.0 # 布林带标准差倍数
+## 🧪 测试
+
+### 运行测试程序
+
+```bash
+# 测试CoinMarketCap API连接
+cargo run --bin test_coinmarketcap
+
+# 测试恐惧贪婪指数
+cargo run --bin test_fear_greed
 ```
 
-## 🔧 开发说明
+### 测试模式运行
 
-### 项目结构
-```
-src/
-├── clients/           # API客户端
-│   ├── coingecko_client.rs    # CoinGecko API
-│   └── coinmarketcap_client.rs # 恐惧贪婪指数
-├── tasks/            # 数据采集任务
-│   ├── crypto_market_task.rs  # HYPE数据采集
-│   └── fear_greed_task.rs     # 恐惧贪婪指数采集
-├── web/              # Web服务
-│   ├── api.rs        # API路由
-│   ├── cache.rs      # 数据缓存
-│   └── mod.rs        # Web服务器
-└── static/           # 静态文件
-    └── dashboard.html # 动漫风格前端界面
+```bash
+# 设置测试模式环境变量
+export EVERSCAN_TEST_MODE=1
+cargo run --bin everscan
 ```
 
-### 添加新币种
-1. 在 `config.toml` 的 `coins` 数组中添加币种ID
-2. 重启程序即可自动监控新币种
+## 📊 数据源
 
-### 自定义前端
-- 修改 `static/dashboard.html` 文件
-- 支持完整的 HTML/CSS/JavaScript 自定义
-- 内置响应式设计和动漫风格样式
+### CoinMarketCap API
+
+- **HYPE代币数据**: 价格、交易量、市值等基础数据
+- **恐惧贪婪指数**: 市场情绪指标
+- **山寨季节指数**: 基于CMC 100指数计算
+
+### 技术指标计算
+
+- **RSI**: 相对强弱指数，14日周期
+- **布林带**: 20日移动平均线 ± 2倍标准差
+- **投资建议**: 基于技术指标的智能建议
 
 ## 🔄 数据更新机制
 
-- **启动时执行**: 程序启动时自动执行所有任务获取初始数据
-- **定时更新**: 每4小时自动更新一次数据
-- **智能缓存**: 内存缓存减少API调用频率
-- **手动刷新**: 前端提供手动刷新按钮
+1. **定时任务**: 后台定时采集数据
+2. **缓存系统**: 减少API调用，提高响应速度
+3. **错误处理**: API失败时显示缓存数据或模拟数据
+4. **自动刷新**: 前端每5分钟自动更新显示
 
-## 🎯 使用场景
+## 🛠️ 开发指南
 
-- **个人投资**: 专注监控感兴趣的代币（如HYPE）
-- **技术分析**: 实时技术指标分析
-- **市场情绪**: 掌握整体市场恐惧贪婪情绪
-- **数据看板**: 美观的数据展示界面
+### 添加新的数据源
 
+1. 在 `clients/` 目录创建新的客户端
+2. 在 `tasks/` 目录创建对应的采集任务
+3. 在 `main.rs` 中注册新任务
+4. 更新前端页面显示
 
-## 🤝 贡献
+### 自定义监控币种
 
-欢迎提交 Issue 和 Pull Request！
+1. 编辑 `config.toml` 中的 `coins` 数组
+2. 重启应用即可生效
+
+## 🚨 故障排除
+
+### 常见问题
+
+1. **API连接失败**
+   - 检查网络连接
+   - 验证API密钥是否正确
+   - 查看API配额是否用完
+
+2. **页面显示错误**
+   - 检查服务器是否正常运行
+   - 查看浏览器控制台错误信息
+   - 确认端口3001是否被占用
+
+3. **数据不更新**
+   - 查看服务器日志
+   - 检查任务调度是否正常
+   - 验证缓存是否工作正常
+
+### 日志查看
+
+```bash
+# 设置日志级别
+export RUST_LOG=debug
+cargo run --bin everscan
+```
+
+## 🤝 贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 🙏 致谢
+
+- [CoinMarketCap](https://coinmarketcap.com/) - 提供可靠的加密货币数据API
+- [Rust](https://www.rust-lang.org/) - 高性能系统编程语言
+- [Axum](https://github.com/tokio-rs/axum) - 现代化的Rust Web框架
 
 ---
+
+**EverScan** - 让区块链数据触手可及 🚀

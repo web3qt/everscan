@@ -1,39 +1,45 @@
 # EverScan 配置文件示例
 # 区块链数据聚合平台配置
 
-[database]
-url = "postgresql://username:password@localhost/everscan"
-max_connections = 10
+[server]
+# Web服务器配置
+host = "0.0.0.0"
+port = 3000
+
+[data_sources]
+# CoinGecko 配置
+[data_sources.coingecko]
+api_key = "" # 可选，留空使用免费版本
+request_interval_ms = 1000
 timeout_seconds = 30
 
-[api_keys]
-# CoinGecko API密钥（可选，提高请求限制）
-# coingecko_api_key = "your_coingecko_api_key_here"
+# CoinMarketCap 配置
+[data_sources.coinmarketcap]
+api_key = "" # 可选，留空使用免费版本
+request_interval_ms = 1000
+timeout_seconds = 30
 
-# 其他API密钥（可选）
-# dune_api_key = "your_dune_api_key_here"
-# glassnode_api_key = "your_glassnode_api_key_here"
-# debank_api_key = "your_debank_api_key_here"
-# arkham_api_key = "your_arkham_api_key_here"
+# Glassnode 配置（预留）
+[data_sources.glassnode]
+api_key = ""
+request_interval_ms = 1000
+timeout_seconds = 30
 
-[tasks]
-# 任务配置
-retry_count = 3
-timeout_seconds = 60
+# DeBank 配置（预留）
+[data_sources.debank]
+api_key = ""
+request_interval_ms = 1000
+timeout_seconds = 30
 
-# 任务执行间隔配置（秒）
-[tasks.intervals]
-crypto_market = 14400   # 4小时 = 14400秒 (新的通用加密货币市场数据任务)
-coingecko = 300         # 5分钟
-dune = 3600             # 1小时
-glassnode = 3600        # 1小时
-debank = 1800           # 30分钟
-arkham = 3600           # 1小时
+# Dune 配置（预留）
+[data_sources.dune]
+api_key = ""
+request_interval_ms = 1000
+timeout_seconds = 30
 
 # 加密货币监控配置
-[crypto_monitoring]
+[monitoring]
 # 要监控的币种列表（使用CoinGecko的币种ID）
-# 目前只监控HYPE代币
 coins = [
     "hyperliquid",      # HYPE代币
     # 可以添加更多币种:
@@ -47,24 +53,5 @@ coins = [
     # "uniswap",        # Uniswap (UNI)
 ]
 
-# 技术指标配置
-[crypto_monitoring.technical_indicators]
-# RSI配置
-rsi_period = 14         # RSI计算周期（天）
-
-# 布林带配置
-bollinger_period = 20   # 布林带计算周期（天）
-bollinger_std_dev = 2.0 # 布林带标准差倍数
-
-# 数据收集配置
-[crypto_monitoring.data_collection]
-# 历史数据天数（用于计算技术指标）
-history_days = 30       # 收集30天历史数据
-# 是否启用技术指标计算
-enable_technical_indicators = true
-
-[app]
-name = "EverScan"
-version = "0.1.0"
-log_level = "info"
-http_timeout_seconds = 30 
+# 数据更新间隔（秒）
+update_interval_seconds = 14400 # 4小时 

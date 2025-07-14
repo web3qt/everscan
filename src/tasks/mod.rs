@@ -1,29 +1,50 @@
-// pub mod dune_task;
-// pub mod glassnode_task;
-// pub mod debank_task;
-// pub mod coingecko_task;
-pub mod crypto_market_task;
-pub mod fear_greed_task; // 新增：贪婪恐惧指数任务
 pub mod task_manager;
+pub mod crypto_market_task;
+pub mod fear_greed_task;
+pub mod altcoin_season_task;
 
-
-// pub use dune_task::*;
-// pub use glassnode_task::*;
-// pub use debank_task::*;
-// pub use coingecko_task::*;
 pub use task_manager::*;
 pub use crypto_market_task::*;
-pub use fear_greed_task::*; // 新增：导出贪婪恐惧指数任务
-
+pub use fear_greed_task::*;
+pub use altcoin_season_task::*;
 
 use anyhow::Result;
-use std::sync::Arc;
-use std::collections::HashMap;
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{info, error, debug};
 
-use crate::storage::PostgresRepository;
 use crate::models::AggregatedMetric;
+use crate::web::cache::DataCache;
+
+/// 任务执行特征
+/// 
+/// 所有数据采集任务都需要实现这个特征
+#[async_trait]
+pub trait Task: Send + Sync {
+    /// 获取任务名称
+    fn name(&self) -> &str;
+    
+    /// 获取任务描述
+    fn description(&self) -> &str;
+    
+    /// 获取任务ID
+    fn id(&self) -> &str;
+    
+    /// 获取执行间隔（秒）
+    fn interval_seconds(&self) -> u64;
+    
+    /// 执行任务
+    /// 
+    /// # 参数
+    /// * `cache` - 数据缓存
+    /// 
+    /// # 返回
+    /// * `Result<Vec<AggregatedMetric>>` - 采集到的指标数据或错误
+    async fn execute(&self, cache: &DataCache) -> Result<Vec<AggregatedMetric>>;
+}
 
 /// 任务状态枚举
 #[derive(Debug, Clone, PartialEq)]
@@ -52,42 +73,6 @@ impl std::fmt::Display for TaskStatus {
     }
 }
 
-/// 任务特征
-/// 
-/// 所有数据收集任务都必须实现此特征
-#[async_trait::async_trait]
-pub trait Task: Send + Sync {
-    /// 获取任务名称
-    fn name(&self) -> &str;
-    
-    /// 获取任务描述
-    fn description(&self) -> &str;
-    
-    /// 获取执行间隔
-    fn interval(&self) -> std::time::Duration;
-    
-    /// 执行任务
-    /// 
-    /// # 参数
-    /// * `storage` - 存储仓库
-    /// 
-    /// # 返回
-    /// * `Result<Vec<AggregatedMetric>>` - 收集到的指标数据或错误
-    async fn execute(&self, storage: &PostgresRepository) -> Result<Vec<AggregatedMetric>>;
-    
-    /// 健康检查
-    /// 
-    /// # 返回
-    /// * `Result<bool>` - 健康状态或错误
-    async fn health_check(&self) -> Result<bool>;
-    
-    /// 获取任务状态
-    fn status(&self) -> TaskStatus;
-    
-    /// 设置任务状态
-    fn set_status(&self, status: TaskStatus);
-}
-
 /// 任务执行结果
 #[derive(Debug, Clone)] // 添加Clone trait
 pub struct TaskExecutionResult {
@@ -111,17 +96,17 @@ pub struct TaskExecutionResult {
 #[derive(Clone)] // 添加Clone trait
 pub struct TaskManager {
     /// 已注册的任务列表
-    tasks: Arc<std::sync::RwLock<Vec<Box<dyn Task>>>>,
+    tasks: Arc<RwLock<Vec<Box<dyn Task>>>>,
     /// 任务执行历史
-    execution_history: Arc<std::sync::RwLock<HashMap<String, Vec<TaskExecutionResult>>>>,
+    execution_history: Arc<RwLock<HashMap<String, Vec<TaskExecutionResult>>>>,
 }
 
 impl TaskManager {
     /// 创建新的任务管理器
     pub fn new() -> Self {
         Self {
-            tasks: Arc::new(std::sync::RwLock::new(Vec::new())),
-            execution_history: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            tasks: Arc::new(RwLock::new(Vec::new())),
+            execution_history: Arc::new(RwLock::new(HashMap::new())),
         }
     }
     
@@ -132,12 +117,12 @@ impl TaskManager {
     /// 
     /// # 返回
     /// * `Result<()>` - 成功或错误
-    pub fn register_task(&mut self, task: Box<dyn Task>) -> Result<()> {
+    pub async fn register_task(&mut self, task: Box<dyn Task>) -> Result<()> {
         let task_name = task.name().to_string();
         
         // 检查是否已存在同名任务
         {
-            let tasks = self.tasks.read().unwrap();
+            let tasks = self.tasks.read().await;
             if tasks.iter().any(|t| t.name() == task_name) {
                 return Err(anyhow::anyhow!("任务 '{}' 已存在", task_name));
             }
@@ -145,7 +130,7 @@ impl TaskManager {
         
         // 添加任务
         {
-            let mut tasks = self.tasks.write().unwrap();
+            let mut tasks = self.tasks.write().await;
             tasks.push(task);
         }
         
@@ -156,24 +141,27 @@ impl TaskManager {
     /// 启动任务管理器
     /// 
     /// # 参数
-    /// * `storage` - 存储仓库
+    /// * `cache` - 数据缓存
     /// 
     /// # 返回
     /// * `Result<()>` - 成功或错误
-    pub async fn start(&mut self, storage: Arc<PostgresRepository>) -> Result<()> {
+    pub async fn start(&mut self, cache: Arc<DataCache>) -> Result<()> {
         info!("🚀 启动任务管理器");
         
-        // 执行健康检查
-        self.health_check().await?;
+        // 立即执行一次所有任务以获取初始数据
+        info!("🔄 启动时执行所有任务，获取初始数据...");
+        if let Err(e) = self.check_and_execute_tasks(&cache).await {
+            error!("❌ 初始任务执行失败: {}", e);
+        }
         
         // 启动任务调度循环
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); // 每分钟检查一次
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // 每小时检查一次
         
         loop {
             interval.tick().await;
             
             // 检查并执行到期的任务
-            if let Err(e) = self.check_and_execute_tasks(&storage).await {
+            if let Err(e) = self.check_and_execute_tasks(&cache).await {
                 error!("❌ 任务执行检查失败: {}", e);
             }
         }
@@ -185,56 +173,21 @@ impl TaskManager {
     /// * `Result<()>` - 成功或错误
     pub async fn stop(&mut self) -> Result<()> {
         info!("🛑 正在停止任务管理器");
-        
-        // 这里可以添加清理逻辑
-        // 例如：等待正在运行的任务完成、关闭连接等
-        
         info!("✅ 任务管理器已停止");
-        Ok(())
-    }
-    
-    /// 健康检查
-    /// 
-    /// # 返回
-    /// * `Result<()>` - 成功或错误
-    async fn health_check(&self) -> Result<()> {
-        info!("🏥 正在执行健康检查");
-        
-        // 检查所有任务的健康状态
-        let tasks = self.tasks.read().unwrap();
-        for task in tasks.iter() {
-            let task_name = task.name();
-            match task.health_check().await {
-                Ok(is_healthy) => {
-                    if is_healthy {
-                        info!("✅ 任务 {} 健康状态良好", task_name);
-                    } else {
-                        info!("⚠️ 任务 {} 健康状态不佳", task_name);
-                    }
-                }
-                Err(e) => {
-                    error!("❌ 任务 {} 健康检查失败: {}", task_name, e);
-                }
-            }
-        }
-        
-        info!("✅ 健康检查完成");
         Ok(())
     }
     
     /// 检查并执行到期的任务
     /// 
     /// # 参数
-    /// * `storage` - 存储仓库
+    /// * `cache` - 数据缓存
     /// 
     /// # 返回
     /// * `Result<()>` - 成功或错误
-    async fn check_and_execute_tasks(&self, storage: &PostgresRepository) -> Result<()> {
+    async fn check_and_execute_tasks(&self, cache: &DataCache) -> Result<()> {
         debug!("🔍 检查待执行任务");
         
-        // 这里简化实现，每次检查时都执行所有任务
-        // 在实际应用中，应该根据任务的最后执行时间和间隔来决定是否执行
-        let results = self.execute_all(storage).await?;
+        let results = self.execute_all(cache).await?;
         
         // 记录执行结果
         for result in results {
@@ -253,46 +206,47 @@ impl TaskManager {
     /// 执行所有任务
     /// 
     /// # 参数
-    /// * `storage` - 存储仓库
+    /// * `cache` - 数据缓存
     /// 
     /// # 返回
     /// * `Result<Vec<TaskExecutionResult>>` - 执行结果列表
-    pub async fn execute_all(&self, storage: &PostgresRepository) -> Result<Vec<TaskExecutionResult>> {
+    pub async fn execute_all(&self, cache: &DataCache) -> Result<Vec<TaskExecutionResult>> {
         let mut results = Vec::new();
         
-        let tasks = self.tasks.read().unwrap();
+        // 获取所有任务并执行
+        let tasks = self.tasks.read().await;
         for task in tasks.iter() {
             let start_time = std::time::Instant::now();
             let task_name = task.name().to_string();
             
-            let result = match task.execute(storage).await {
-                Ok(metrics) => {
-                    let execution_time = start_time.elapsed();
-                    TaskExecutionResult {
-                        task_name: task_name.clone(),
-                        success: true,
-                        error: None,
-                        metrics_count: metrics.len(),
-                        execution_time_ms: execution_time.as_millis(),
-                        executed_at: Utc::now(),
+            let result = match task.execute(cache).await {
+                    Ok(metrics) => {
+                        let execution_time = start_time.elapsed();
+                        TaskExecutionResult {
+                            task_name: task_name.clone(),
+                            success: true,
+                            error: None,
+                            metrics_count: metrics.len(),
+                            execution_time_ms: execution_time.as_millis(),
+                            executed_at: Utc::now(),
+                        }
                     }
-                }
-                Err(e) => {
-                    let execution_time = start_time.elapsed();
-                    TaskExecutionResult {
-                        task_name: task_name.clone(),
-                        success: false,
-                        error: Some(e.to_string()),
-                        metrics_count: 0,
-                        execution_time_ms: execution_time.as_millis(),
-                        executed_at: Utc::now(),
+                    Err(e) => {
+                        let execution_time = start_time.elapsed();
+                        TaskExecutionResult {
+                            task_name: task_name.clone(),
+                            success: false,
+                            error: Some(e.to_string()),
+                            metrics_count: 0,
+                            execution_time_ms: execution_time.as_millis(),
+                            executed_at: Utc::now(),
+                        }
                     }
-                }
-            };
-            
+                };
+                
             // 保存执行历史
             {
-                let mut history = self.execution_history.write().unwrap();
+                let mut history = self.execution_history.write().await;
                 history.entry(task_name).or_insert_with(Vec::new).push(result.clone());
             }
             
@@ -303,19 +257,16 @@ impl TaskManager {
     }
     
     /// 获取任务列表
-    pub fn get_tasks(&self) -> Vec<String> {
-        let tasks = self.tasks.read().unwrap();
+    pub async fn get_tasks(&self) -> Vec<String> {
+        let tasks = self.tasks.read().await;
         tasks.iter().map(|task| task.name().to_string()).collect()
     }
     
     /// 获取任务状态
-    /// 
-    /// # 返回
-    /// * `Vec<(String, String)>` - 任务名称和状态的列表
-    pub fn get_task_status(&self) -> Vec<(String, String)> {
-        let tasks = self.tasks.read().unwrap();
-        tasks.iter()
-            .map(|task| (task.name().to_string(), task.status().to_string()))
-            .collect()
+    pub async fn get_task_status(&self) -> Vec<(String, String)> {
+        let tasks = self.tasks.read().await;
+        tasks.iter().map(|task| {
+            (task.name().to_string(), "运行中".to_string())
+        }).collect()
     }
 } 

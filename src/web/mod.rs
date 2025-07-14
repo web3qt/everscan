@@ -16,10 +16,9 @@ use tower_http::{
 };
 use std::sync::Arc;
 
-use crate::config::Config;
-use crate::storage::PostgresRepository;
+use crate::config::AppConfig;
 use self::{
-    api::{create_api_routes, AppState},
+    api::create_api_routes,
     cache::DataCache,
     websocket::websocket_handler,
 };
@@ -28,14 +27,12 @@ use self::{
 /// 
 /// 负责提供RESTful API和静态文件服务
 /// 支持实时数据推送和可视化界面
-#[derive(Clone)] // 添加Clone trait
+#[derive(Clone)]
 pub struct WebServer {
     /// 应用配置
-    config: Config,
+    config: AppConfig,
     /// 数据缓存
     cache: Arc<DataCache>,
-    /// 数据库存储（可选）
-    storage: Option<Arc<PostgresRepository>>,
 }
 
 impl WebServer {
@@ -44,19 +41,16 @@ impl WebServer {
     /// # 参数
     /// * `config` - 应用配置
     /// * `cache` - 数据缓存
-    /// * `storage` - 数据库存储（可选）
     /// 
     /// # 返回
     /// * `Self` - Web服务器实例
     pub fn new(
-        config: Config,
+        config: AppConfig,
         cache: Arc<DataCache>,
-        storage: Option<Arc<PostgresRepository>>,
     ) -> Self {
         Self {
             config,
             cache,
-            storage,
         }
     }
     
@@ -82,16 +76,7 @@ impl WebServer {
     /// 创建应用路由
     fn create_app(&self) -> Router {
         // 创建API路由
-        let api_routes = create_api_routes(
-            self.cache.clone(),
-            self.storage.clone(),
-        );
-        
-        // 创建应用状态
-        let app_state = AppState {
-            cache: self.cache.clone(),
-            storage: self.storage.clone(),
-        };
+        let api_routes = create_api_routes(self.cache.clone());
         
         Router::new()
             // 主页

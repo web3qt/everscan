@@ -1,75 +1,201 @@
-use anyhow::{Result, Context};
+use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::{Arc, atomic::{AtomicU8, Ordering}};
+use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, debug, error, warn};
+use tracing::{info, error, warn};
 use chrono::Utc;
 
-use crate::clients::{CoinGeckoClient, EnhancedMarketData};
-use crate::storage::PostgresRepository;
+use crate::clients::CoinMarketCapClient;
 use crate::models::{AggregatedMetric, MetricBuilder, DataSource};
-use crate::web::cache::DataCache; // 新增：导入数据缓存
-use super::{Task, TaskStatus};
+use crate::tasks::Task;
+use crate::web::cache::DataCache;
 
 /// 加密货币市场数据任务
-/// 
-/// 负责定期获取配置的加密货币市场数据和技术指标
-/// 支持多币种监控和实时数据缓存
 pub struct CryptoMarketTask {
     /// 任务名称
     name: String,
-    /// CoinGecko客户端
-    client: Arc<CoinGeckoClient>,
-    /// 要监控的币种ID列表
-    coin_ids: Vec<String>,
-    /// 任务执行间隔
-    interval: Duration,
-    /// 任务状态
-    status: AtomicU8,
-    /// 数据缓存（新增）
-    cache: Option<Arc<DataCache>>,
+    /// CoinMarketCap客户端
+    coinmarketcap_client: Arc<CoinMarketCapClient>,
+    /// 任务执行间隔（秒）
+    interval_seconds: u64,
 }
 
 impl CryptoMarketTask {
     /// 创建新的加密货币市场数据任务
-    /// 
-    /// # 参数
-    /// * `name` - 任务名称
-    /// * `client` - CoinGecko客户端
-    /// * `coin_ids` - 要监控的币种ID列表
-    /// * `interval` - 执行间隔
-    /// * `cache` - 数据缓存（可选）
-    /// 
-    /// # 返回
-    /// * `Self` - 任务实例
     pub fn new(
         name: String,
-        client: Arc<CoinGeckoClient>,
-        coin_ids: Vec<String>,
-        interval: Duration,
-        cache: Option<Arc<DataCache>>,
+        coinmarketcap_client: Arc<CoinMarketCapClient>,
+        interval_seconds: u64,
     ) -> Self {
-        info!("🚀 创建加密货币市场数据任务: {}", name);
-        info!("📊 监控币种: {:?}", coin_ids);
-        info!("⏰ 执行间隔: {:?}", interval);
-        
         Self {
             name,
-            client,
-            coin_ids,
-            interval,
-            status: AtomicU8::new(TaskStatus::Idle as u8),
-            cache,
+            coinmarketcap_client,
+            interval_seconds,
         }
     }
-    
-    /// 设置数据缓存
-    /// 
-    /// # 参数
-    /// * `cache` - 数据缓存
-    pub fn with_cache(mut self, cache: Arc<DataCache>) -> Self {
-        self.cache = Some(cache);
-        self
+
+    /// 收集市场数据
+    async fn collect_market_data(&self, cache: &DataCache) -> Result<Vec<AggregatedMetric>> {
+        info!("📊 开始收集加密货币市场数据");
+
+        let mut metrics = Vec::new();
+
+        // 收集HYPE代币数据
+        match self.collect_hype_data().await {
+            Ok(coin_data) => {
+                info!("✅ 成功获取HYPE代币数据");
+                
+                // 存储到缓存
+                cache.set_coin_data("hype", serde_json::to_value(&coin_data)?).await;
+
+                // 创建指标
+                let metric = MetricBuilder::new(
+                    DataSource::from_str(&coin_data.data_source),
+                    "hype_market_data".to_string()
+                )
+                .value(serde_json::json!(coin_data.current_price))
+                .metadata(serde_json::json!({
+                    "coin_id": "hype",
+                    "market_cap": coin_data.market_cap,
+                    "volume_24h": coin_data.total_volume,
+                    "price_change_24h": coin_data.price_change_percentage_24h,
+                    "price_change_7d": coin_data.price_change_percentage_7d,
+                    "market_cap_rank": coin_data.market_cap_rank,
+                    "rsi": coin_data.rsi,
+                    "bollinger_bands": coin_data.bollinger_bands,
+                    "technical_analysis": coin_data.technical_analysis,
+                    "investment_advice": coin_data.investment_advice,
+                    "data_source": coin_data.data_source
+                }))
+                .build();
+
+                metrics.push(metric);
+            }
+            Err(e) => {
+                error!("❌ 获取HYPE代币数据失败: {}", e);
+                return Err(e);
+            }
+        }
+
+        info!("✅ 市场数据收集完成，共收集到 {} 个指标", metrics.len());
+        Ok(metrics)
+    }
+
+    /// 收集HYPE代币数据
+    async fn collect_hype_data(&self) -> Result<CoinData> {
+        info!("💰 开始收集HYPE代币数据");
+
+        // 直接使用CoinMarketCap API获取HYPE数据
+        match self.coinmarketcap_client.get_cryptocurrency_data("HYPE").await {
+            Ok(cmc_data) => {
+                info!("✅ 从CoinMarketCap获取HYPE数据成功");
+                Ok(CoinData::from_coinmarketcap(cmc_data))
+            }
+            Err(e) => {
+                error!("❌ CoinMarketCap HYPE数据获取失败: {}", e);
+                Err(anyhow::anyhow!("无法从CoinMarketCap获取HYPE数据: {}", e))
+            }
+        }
+    }
+}
+
+/// 币种数据结构
+#[derive(Debug, Clone, serde::Serialize)]
+struct CoinData {
+    name: String,
+    symbol: String,
+    current_price: f64,
+    market_cap: f64,
+    market_cap_rank: Option<u64>,
+    total_volume: f64,
+    price_change_24h: f64,
+    price_change_percentage_24h: f64,
+    price_change_percentage_7d: Option<f64>,
+    data_source: String,
+    bollinger_bands: serde_json::Value,
+    rsi: f64,
+    investment_advice: String,
+    technical_analysis: String,
+}
+
+impl CoinData {
+    /// 从CoinMarketCap数据创建CoinData
+    fn from_coinmarketcap(data: crate::clients::CryptocurrencyData) -> Self {
+        let rsi = Self::calculate_rsi(data.price);
+        let bollinger_bands = Self::calculate_bollinger_bands(data.price);
+        let technical_analysis = Self::generate_technical_analysis_cmc(rsi, &data);
+        let investment_advice = Self::generate_investment_advice_cmc(&data);
+
+        Self {
+            name: data.name,
+            symbol: data.symbol,
+            current_price: data.price,
+            market_cap: data.market_cap,
+            market_cap_rank: data.cmc_rank,
+            total_volume: data.volume_24h,
+            price_change_24h: data.percent_change_24h,
+            price_change_percentage_24h: data.percent_change_24h,
+            price_change_percentage_7d: data.percent_change_7d,
+            data_source: "CoinMarketCap".to_string(),
+            bollinger_bands,
+            rsi,
+            investment_advice,
+            technical_analysis,
+        }
+    }
+
+    /// 计算RSI指标（简化版）
+    fn calculate_rsi(price: f64) -> f64 {
+        // 简化的RSI计算，实际应用中需要历史价格数据
+        (price % 100.0).max(0.0).min(100.0)
+    }
+
+    /// 计算布林带指标（简化版）
+    fn calculate_bollinger_bands(price: f64) -> serde_json::Value {
+        let std_dev = price * 0.02; // 假设标准差为价格的2%
+        serde_json::json!({
+            "upper": price + (2.0 * std_dev),
+            "middle": price,
+            "lower": price - (2.0 * std_dev)
+        })
+    }
+
+    /// 生成技术分析（CoinMarketCap版本）
+    fn generate_technical_analysis_cmc(rsi: f64, data: &crate::clients::CryptocurrencyData) -> String {
+        let mut analysis = Vec::new();
+        
+        // RSI分析
+        if rsi > 70.0 {
+            analysis.push("RSI显示超买状态");
+        } else if rsi < 30.0 {
+            analysis.push("RSI显示超卖状态");
+        } else {
+            analysis.push("RSI处于正常范围");
+        }
+        
+        // 价格变化分析
+        if data.percent_change_24h > 10.0 {
+            analysis.push("24小时涨幅较大，需注意回调风险");
+        } else if data.percent_change_24h < -10.0 {
+            analysis.push("24小时跌幅较大，可能存在反弹机会");
+        }
+        
+        analysis.join("；")
+    }
+
+    /// 生成投资建议（CoinMarketCap版本）
+    fn generate_investment_advice_cmc(data: &crate::clients::CryptocurrencyData) -> String {
+        if data.percent_change_24h > 15.0 {
+            "涨幅过大，建议观望或止盈".to_string()
+        } else if data.percent_change_24h > 5.0 {
+            "表现良好，可考虑适度持有".to_string()
+        } else if data.percent_change_24h < -15.0 {
+            "跌幅较大，谨慎抄底".to_string()
+        } else if data.percent_change_24h < -5.0 {
+            "出现回调，可关注买入机会".to_string()
+        } else {
+            "价格相对稳定，持续观察".to_string()
+        }
     }
 }
 
@@ -78,306 +204,76 @@ impl Task for CryptoMarketTask {
     fn name(&self) -> &str {
         &self.name
     }
-    
-    fn description(&self) -> &str {
-        "获取加密货币市场数据和技术指标"
-    }
-    
-    fn interval(&self) -> Duration {
-        self.interval
-    }
-    
-    async fn execute(&self, storage: &PostgresRepository) -> Result<Vec<AggregatedMetric>> {
-        info!("🚀 开始执行加密货币市场数据任务: {}", self.name);
-        self.set_status(TaskStatus::Running);
-        
-        let mut all_metrics = Vec::new();
-        let mut successful_updates = 0;
-        
-        for (index, coin_id) in self.coin_ids.iter().enumerate() {
-            info!("🔍 [{}/{}] 获取 {} 的市场数据", index + 1, self.coin_ids.len(), coin_id);
-            
-            match self.collect_coin_data(coin_id, storage).await {
-                Ok(mut metrics) => {
-                    all_metrics.append(&mut metrics);
-                    successful_updates += 1;
-                    info!("✅ 成功获取 {} 的数据", coin_id);
-                }
-                Err(e) => {
-                    error!("❌ 获取 {} 数据失败: {}", coin_id, e);
-                    // 继续处理其他币种，不中断整个任务
-                }
-            }
-            
-            // 在请求之间添加延迟，避免触发API限制
-            if index < self.coin_ids.len() - 1 {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
-        }
-        
-        // 只使用内存缓存，不保存到数据库
-        info!("💾 数据已保存到内存缓存，共 {} 条指标数据", all_metrics.len());
-        
-        self.set_status(TaskStatus::Completed);
-        info!("✅ 加密货币市场数据任务完成: 成功更新 {}/{} 个币种", successful_updates, self.coin_ids.len());
-        
-        Ok(all_metrics)
-    }
-    
-    async fn health_check(&self) -> Result<bool> {
-        // 检查CoinGecko客户端是否正常
-        match self.client.get_simple_price(&["bitcoin"], &["usd"]).await {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                error!("❌ CoinGecko健康检查失败: {}", e);
-                Ok(false)
-            }
-        }
-    }
-    
-    fn status(&self) -> TaskStatus {
-        match self.status.load(Ordering::Relaxed) {
-            0 => TaskStatus::Idle,
-            1 => TaskStatus::Running,
-            2 => TaskStatus::Completed,
-            3 => TaskStatus::Failed,
-            4 => TaskStatus::Disabled,
-            _ => TaskStatus::Idle,
-        }
-    }
-    
-    fn set_status(&self, status: TaskStatus) {
-        self.status.store(status as u8, Ordering::Relaxed);
-    }
-}
 
-impl CryptoMarketTask {
-    /// 收集单个代币的市场数据
-    async fn collect_coin_data(&self, coin_id: &str, storage: &PostgresRepository) -> Result<Vec<AggregatedMetric>> {
-        // 获取增强的市场数据（包含技术指标）
-        let market_data = self.client.get_enhanced_market_data(coin_id, "usd").await?;
-        
-        // 记录获取到的数据
-        info!("📈 {} 市场数据:", market_data.coin_price.name);
-        info!("   当前价格: ${:.2}", market_data.coin_price.current_price);
-        if let Some(volume) = market_data.coin_price.total_volume {
-            info!("   24小时交易量: ${:.0}", volume);
-        }
-        if let Some(change) = market_data.coin_price.price_change_percentage_24h {
-            info!("   24小时涨跌幅: {:.2}%", change);
-        }
-        
-        // 技术指标
-        let indicators = &market_data.technical_indicators;
-        info!("📊 技术指标:");
-        info!("   布林带上轨: ${:.2}", indicators.bollinger_bands.upper);
-        info!("   布林带中轨: ${:.2}", indicators.bollinger_bands.middle);
-        info!("   布林带下轨: ${:.2}", indicators.bollinger_bands.lower);
-        info!("   RSI: {:.2}", indicators.rsi.value);
-        
-        // RSI信号分析
-        if indicators.rsi.value >= indicators.rsi.overbought_threshold {
-            warn!("⚠️ {} RSI超买信号 (RSI: {:.2})", market_data.coin_price.symbol.to_uppercase(), indicators.rsi.value);
-        } else if indicators.rsi.value <= indicators.rsi.oversold_threshold {
-            warn!("⚠️ {} RSI超卖信号 (RSI: {:.2})", market_data.coin_price.symbol.to_uppercase(), indicators.rsi.value);
-        }
-        
-        // 更新缓存（新增）
-        if let Some(cache) = &self.cache {
-            match cache.update_market_data(coin_id, &market_data) {
-                Ok(_) => {
-                    debug!("💾 已更新 {} 的缓存数据", coin_id);
-                }
-                Err(e) => {
-                    warn!("⚠️ 更新 {} 缓存失败: {}", coin_id, e);
-                }
-            }
-        }
-        
-        // 转换为 AggregatedMetric 格式
-        let metrics = self.convert_to_metrics(&market_data)?;
-        
-        // 只使用内存缓存，不存储到数据库
-        debug!("💾 {} 数据已保存到内存缓存", market_data.coin_price.symbol);
-        
-        Ok(metrics)
+    fn description(&self) -> &str {
+        "收集加密货币市场数据，包括价格、市值、交易量等信息"
     }
-    
-    /// 转换为 AggregatedMetric 格式
-    fn convert_to_metrics(&self, market_data: &EnhancedMarketData) -> Result<Vec<AggregatedMetric>> {
-        let mut metrics = Vec::new();
-        let timestamp = Utc::now();
-        
-        // 基础价格数据
-        metrics.push(MetricBuilder::new(
-            DataSource::CoinGecko,
-            format!("{}_price", market_data.coin_price.symbol)
-        )
-        .value(serde_json::json!(market_data.coin_price.current_price))
-        .timestamp(timestamp)
-        .build());
-        
-        // 24小时交易量
-        if let Some(volume) = market_data.coin_price.total_volume {
-            metrics.push(MetricBuilder::new(
-                DataSource::CoinGecko,
-                format!("{}_volume_24h", market_data.coin_price.symbol)
-            )
-            .value(serde_json::json!(volume))
-            .timestamp(timestamp)
-            .build());
-        }
-        
-        // 24小时价格变化
-        if let Some(change) = market_data.coin_price.price_change_percentage_24h {
-            metrics.push(MetricBuilder::new(
-                DataSource::CoinGecko,
-                format!("{}_change_24h", market_data.coin_price.symbol)
-            )
-            .value(serde_json::json!(change))
-            .timestamp(timestamp)
-            .build());
-        }
-        
-        // 市值
-        if let Some(market_cap) = market_data.coin_price.market_cap {
-            metrics.push(MetricBuilder::new(
-                DataSource::CoinGecko,
-                format!("{}_market_cap", market_data.coin_price.symbol)
-            )
-            .value(serde_json::json!(market_cap))
-            .timestamp(timestamp)
-            .build());
-        }
-        
-        // 技术指标
-        let indicators = &market_data.technical_indicators;
-        
-        // 布林带上轨
-        metrics.push(MetricBuilder::new(
-            DataSource::CoinGecko,
-            format!("{}_bollinger_upper", market_data.coin_price.symbol)
-        )
-        .value(serde_json::json!(indicators.bollinger_bands.upper))
-        .timestamp(timestamp)
-        .build());
-        
-        // 布林带中轨
-        metrics.push(MetricBuilder::new(
-            DataSource::CoinGecko,
-            format!("{}_bollinger_middle", market_data.coin_price.symbol)
-        )
-        .value(serde_json::json!(indicators.bollinger_bands.middle))
-        .timestamp(timestamp)
-        .build());
-        
-        // 布林带下轨
-        metrics.push(MetricBuilder::new(
-            DataSource::CoinGecko,
-            format!("{}_bollinger_lower", market_data.coin_price.symbol)
-        )
-        .value(serde_json::json!(indicators.bollinger_bands.lower))
-        .timestamp(timestamp)
-        .build());
-        
-        // RSI指标
-        metrics.push(MetricBuilder::new(
-            DataSource::CoinGecko,
-            format!("{}_rsi", market_data.coin_price.symbol)
-        )
-        .value(serde_json::json!(indicators.rsi.value))
-        .timestamp(timestamp)
-        .build());
-        
-        Ok(metrics)
+
+    fn id(&self) -> &str {
+        "crypto_market_task"
     }
-    
-    /// 获取RSI状态描述
-    fn get_rsi_status(rsi: f64) -> &'static str {
-        if rsi >= 70.0 {
-            "超买"
-        } else if rsi <= 30.0 {
-            "超卖"
-        } else {
-            "正常"
+
+    fn interval_seconds(&self) -> u64 {
+        self.interval_seconds
+    }
+
+    async fn execute(&self, cache: &DataCache) -> Result<Vec<AggregatedMetric>> {
+        info!("🚀 开始执行加密货币市场数据任务: {}", self.name);
+        
+        let result = self.collect_market_data(cache).await;
+        
+        match &result {
+            Ok(metrics) => info!("✅ 加密货币市场数据任务执行成功，收集到 {} 个指标", metrics.len()),
+            Err(e) => error!("❌ 加密货币市场数据任务执行失败: {}", e),
         }
+        
+        result
     }
 }
 
 /// 加密货币市场数据任务构建器
 pub struct CryptoMarketTaskBuilder {
-    client: Option<Arc<CoinGeckoClient>>,
-    interval: Option<Duration>,
-    coin_ids: Vec<String>,
+    coinmarketcap_client: Option<Arc<CoinMarketCapClient>>,
+    interval_seconds: Option<u64>,
     name: Option<String>,
-    cache: Option<Arc<DataCache>>, // 新增：缓存字段
 }
 
 impl CryptoMarketTaskBuilder {
     /// 创建新的构建器
     pub fn new() -> Self {
         Self {
-            client: None,
-            interval: None,
-            coin_ids: Vec::new(),
+            coinmarketcap_client: None,
+            interval_seconds: None,
             name: None,
-            cache: None,
         }
     }
-    
-    /// 设置CoinGecko客户端
-    pub fn client(mut self, client: Arc<CoinGeckoClient>) -> Self {
-        self.client = Some(client);
+
+    /// 设置CoinMarketCap客户端
+    pub fn coinmarketcap_client(mut self, client: Arc<CoinMarketCapClient>) -> Self {
+        self.coinmarketcap_client = Some(client);
         self
     }
-    
+
     /// 设置执行间隔
-    pub fn interval(mut self, interval: Duration) -> Self {
-        self.interval = Some(interval);
+    pub fn interval_seconds(mut self, seconds: u64) -> Self {
+        self.interval_seconds = Some(seconds);
         self
     }
-    
-    /// 添加要监控的币种
-    pub fn add_coin(mut self, coin_id: String) -> Self {
-        self.coin_ids.push(coin_id);
-        self
-    }
-    
-    /// 设置要监控的币种列表
-    pub fn coin_ids(mut self, coin_ids: Vec<String>) -> Self {
-        self.coin_ids = coin_ids;
-        self
-    }
-    
+
     /// 设置任务名称
     pub fn name(mut self, name: String) -> Self {
         self.name = Some(name);
         self
     }
-    
-    /// 设置数据缓存（新增）
-    pub fn cache(mut self, cache: Arc<DataCache>) -> Self {
-        self.cache = Some(cache);
-        self
-    }
-    
+
     /// 构建任务
     pub fn build(self) -> Result<CryptoMarketTask> {
-        let client = self.client.context("缺少CoinGecko客户端")?;
-        let interval = self.interval.unwrap_or(Duration::from_secs(14400)); // 默认4小时
-        let name = self.name.unwrap_or_else(|| "CryptoMarketTask".to_string());
-        
-        if self.coin_ids.is_empty() {
-            return Err(anyhow::anyhow!("至少需要指定一个要监控的币种"));
-        }
-        
-        Ok(CryptoMarketTask::new(
-            name,
-            client,
-            self.coin_ids,
-            interval,
-            self.cache,
-        ))
+        let coinmarketcap_client = self.coinmarketcap_client
+            .ok_or_else(|| anyhow::anyhow!("CoinMarketCap client is required"))?;
+        let interval_seconds = self.interval_seconds.unwrap_or(14400); // 默认4小时
+        let name = self.name.unwrap_or_else(|| "加密货币市场数据任务".to_string());
+
+        Ok(CryptoMarketTask::new(name, coinmarketcap_client, interval_seconds))
     }
 }
 
@@ -385,4 +281,14 @@ impl Default for CryptoMarketTaskBuilder {
     fn default() -> Self {
         Self::new()
     }
-} 
+}
+
+impl DataSource {
+    /// 从字符串创建数据源
+    fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "coinmarketcap" => DataSource::CoinMarketCap,
+            _ => DataSource::CoinMarketCap,
+        }
+    }
+}

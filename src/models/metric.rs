@@ -1,13 +1,12 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use sqlx::FromRow;
 
 /// 聚合指标数据模型
 /// 
 /// 这是系统中所有数据的统一存储格式
 /// 支持存储来自不同数据源的各种类型的指标数据
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedMetric {
     /// 唯一标识符
     pub id: Uuid,

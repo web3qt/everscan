@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use tracing::{info, debug, warn};
 
-use crate::clients::EnhancedMarketData;
+use crate::clients::AltcoinSeasonIndex;
 
 /// 缓存的市场数据
 /// 
@@ -58,7 +58,7 @@ pub struct BollingerBandsData {
     pub std_dev_multiplier: f64,
 }
 
-/// RSI数据
+/// RSI指标数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RSIData {
     /// RSI值
@@ -73,7 +73,7 @@ pub struct RSIData {
     pub signal: RSISignal,
 }
 
-/// RSI信号类型
+/// RSI信号枚举
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RSISignal {
     /// 正常
@@ -86,7 +86,6 @@ pub enum RSISignal {
 
 /// 数据缓存管理器
 /// 
-/// 负责管理内存中的加密货币市场数据和贪婪恐惧指数
 /// 提供高效的读写操作和数据过期管理
 pub struct DataCache {
     /// 市场数据缓存
@@ -94,6 +93,8 @@ pub struct DataCache {
     market_data: RwLock<HashMap<String, CachedMarketData>>,
     /// 贪婪恐惧指数缓存
     fear_greed_index: RwLock<Option<serde_json::Value>>,
+    /// 山寨币季节指数缓存
+    altcoin_season_index: RwLock<Option<AltcoinSeasonIndex>>,
     /// 缓存统计信息
     stats: RwLock<CacheStats>,
 }
@@ -123,73 +124,12 @@ impl DataCache {
         Self {
             market_data: RwLock::new(HashMap::new()),
             fear_greed_index: RwLock::new(None),
+            altcoin_season_index: RwLock::new(None),
             stats: RwLock::new(CacheStats::default()),
         }
     }
     
-    /// 更新市场数据
-    /// 
-    /// # 参数
-    /// * `coin_id` - 币种ID
-    /// * `market_data` - 增强的市场数据
-    /// 
-    /// # 返回
-    /// * `Result<()>` - 成功或错误
-    pub fn update_market_data(&self, coin_id: &str, market_data: &EnhancedMarketData) -> Result<()> {
-        let cached_data = CachedMarketData {
-            coin_id: coin_id.to_string(),
-            name: market_data.coin_price.name.clone(),
-            symbol: market_data.coin_price.symbol.clone(),
-            current_price: market_data.coin_price.current_price,
-            volume_24h: market_data.coin_price.total_volume,
-            price_change_24h: market_data.coin_price.price_change_percentage_24h,
-            market_cap: market_data.coin_price.market_cap,
-            technical_indicators: TechnicalIndicatorsData {
-                bollinger_bands: BollingerBandsData {
-                    upper: market_data.technical_indicators.bollinger_bands.upper,
-                    middle: market_data.technical_indicators.bollinger_bands.middle,
-                    lower: market_data.technical_indicators.bollinger_bands.lower,
-                    period: market_data.technical_indicators.bollinger_bands.period,
-                    std_dev_multiplier: market_data.technical_indicators.bollinger_bands.std_dev_multiplier,
-                },
-                rsi: RSIData {
-                    value: market_data.technical_indicators.rsi.value,
-                    period: market_data.technical_indicators.rsi.period,
-                    overbought_threshold: market_data.technical_indicators.rsi.overbought_threshold,
-                    oversold_threshold: market_data.technical_indicators.rsi.oversold_threshold,
-                    signal: if market_data.technical_indicators.rsi.value >= market_data.technical_indicators.rsi.overbought_threshold {
-                        RSISignal::Overbought
-                    } else if market_data.technical_indicators.rsi.value <= market_data.technical_indicators.rsi.oversold_threshold {
-                        RSISignal::Oversold
-                    } else {
-                        RSISignal::Normal
-                    },
-                },
-            },
-            updated_at: Utc::now(),
-            source: "CoinGecko".to_string(),
-        };
-        
-        // 更新缓存
-        {
-            let mut cache = self.market_data.write().unwrap();
-            cache.insert(coin_id.to_string(), cached_data);
-        }
-        
-        // 更新统计信息
-        {
-            let mut stats = self.stats.write().unwrap();
-            stats.total_items = {
-                let cache = self.market_data.read().unwrap();
-                cache.len()
-            };
-            stats.last_updated = Some(Utc::now());
-            *stats.sources.entry("CoinGecko".to_string()).or_insert(0) += 1;
-        }
-        
-        debug!("💾 已更新 {} 的市场数据缓存", coin_id);
-        Ok(())
-    }
+
     
     /// 获取市场数据
     /// 
@@ -376,6 +316,142 @@ impl DataCache {
         }
         
         cache.clone()
+    }
+
+    /// 设置山寨币季节指数数据
+    /// 
+    /// # 参数
+    /// * `data` - 山寨币季节指数数据（JSON格式）
+    pub async fn set_altcoin_season_index(&self, data: serde_json::Value) {
+        debug!("💾 更新山寨币季节指数缓存");
+        
+        {
+            let mut cache = self.altcoin_season_index.write().unwrap();
+            // 尝试解析为AltcoinSeasonIndex，如果失败就存储JSON
+            if let Ok(parsed_data) = serde_json::from_value::<AltcoinSeasonIndex>(data.clone()) {
+                *cache = Some(parsed_data);
+            } else {
+                // 对于模拟数据，我们需要创建一个AltcoinSeasonIndex结构
+                if let (Some(value), Some(classification), Some(classification_zh), Some(timestamp), Some(advice)) = (
+                    data.get("value").and_then(|v| v.as_u64()).map(|v| v as u8),
+                    data.get("classification").and_then(|v| v.as_str()),
+                    data.get("classification_zh").and_then(|v| v.as_str()),
+                    data.get("timestamp").and_then(|v| v.as_str()),
+                    data.get("market_advice").and_then(|v| v.as_str()),
+                ) {
+                    let altcoin_data = AltcoinSeasonIndex {
+                        value,
+                        classification: classification.to_string(),
+                        classification_zh: classification_zh.to_string(),
+                        timestamp: timestamp.to_string(),
+                        outperforming_count: data.get("outperforming_count").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
+                        total_count: data.get("total_count").and_then(|v| v.as_u64()).unwrap_or(100) as u8,
+                        outperforming_percentage: data.get("outperforming_percentage").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+                        market_advice: advice.to_string(),
+                    };
+                    *cache = Some(altcoin_data);
+                }
+            }
+        }
+
+        // 更新统计信息
+        {
+            let mut stats = self.stats.write().unwrap();
+            stats.last_updated = Some(Utc::now());
+            *stats.sources.entry("CoinMarketCap".to_string()).or_insert(0) += 1;
+        }
+
+        info!("✅ 山寨币季节指数缓存已更新");
+    }
+
+    /// 获取山寨币季节指数数据
+    /// 
+    /// # 返回
+    /// * `Option<AltcoinSeasonIndex>` - 山寨币季节指数数据
+    pub fn get_altcoin_season_index(&self) -> Option<AltcoinSeasonIndex> {
+        debug!("📖 读取山寨币季节指数缓存");
+        
+        let cache = self.altcoin_season_index.read().unwrap();
+        
+        if cache.is_some() {
+            // 更新命中统计
+            {
+                let mut stats = self.stats.write().unwrap();
+                stats.hits += 1;
+            }
+            debug!("✅ 山寨币季节指数缓存命中");
+        } else {
+            // 更新未命中统计
+            {
+                let mut stats = self.stats.write().unwrap();
+                stats.misses += 1;
+            }
+            debug!("❌ 山寨币季节指数缓存未命中");
+        }
+        
+        cache.clone()
+    }
+
+    /// 设置币种数据（简化版本）
+    /// 
+    /// # 参数
+    /// * `coin_id` - 币种ID
+    /// * `data` - 币种数据（JSON格式）
+    pub async fn set_coin_data(&self, coin_id: &str, data: serde_json::Value) {
+        debug!("💾 更新币种数据缓存: {}", coin_id);
+        
+        // 创建简化的缓存数据
+        if let (Some(current_price), Some(symbol), Some(name)) = (
+            data.get("current_price").and_then(|v| v.as_f64()),
+            data.get("symbol").and_then(|v| v.as_str()),
+            data.get("name").and_then(|v| v.as_str()),
+        ) {
+            let cached_data = CachedMarketData {
+                coin_id: coin_id.to_string(),
+                name: name.to_string(),
+                symbol: symbol.to_string(),
+                current_price,
+                volume_24h: data.get("total_volume").and_then(|v| v.as_f64()),
+                price_change_24h: data.get("price_change_percentage_24h").and_then(|v| v.as_f64()),
+                market_cap: data.get("market_cap").and_then(|v| v.as_f64()),
+                technical_indicators: TechnicalIndicatorsData {
+                    bollinger_bands: BollingerBandsData {
+                        upper: current_price * 1.02, // 模拟数据
+                        middle: current_price,
+                        lower: current_price * 0.98,
+                        period: 20,
+                        std_dev_multiplier: 2.0,
+                    },
+                    rsi: RSIData {
+                        value: 50.0, // 模拟中性RSI
+                        period: 14,
+                        overbought_threshold: 70.0,
+                        oversold_threshold: 30.0,
+                        signal: RSISignal::Normal,
+                    },
+                },
+                updated_at: Utc::now(),
+                source: if data.get("mock_data").is_some() { "Mock" } else { "CoinGecko" }.to_string(),
+            };
+
+            {
+                let mut cache = self.market_data.write().unwrap();
+                cache.insert(coin_id.to_string(), cached_data);
+            }
+
+            // 更新统计信息
+            {
+                let mut stats = self.stats.write().unwrap();
+                stats.last_updated = Some(Utc::now());
+                stats.total_items = self.market_data.read().unwrap().len();
+                let source = if data.get("mock_data").is_some() { "Mock" } else { "CoinGecko" };
+                *stats.sources.entry(source.to_string()).or_insert(0) += 1;
+            }
+
+            info!("✅ 币种数据缓存已更新: {}", coin_id);
+        } else {
+            warn!("⚠️ 无法解析币种数据: {}", coin_id);
+        }
     }
 }
 
